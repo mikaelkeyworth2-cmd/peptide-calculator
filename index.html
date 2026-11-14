@@ -1,0 +1,1995 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Peptide Calculator &amp; Planner</title>
+<meta name="description" content="Reconstitution and dose math, cycle planner and inventory tracker. Math tool only, not medical advice.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0e7c86">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Peptide Calc">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e7c86'/%3E%3Crect x='14' y='27' width='30' height='10' rx='2' fill='none' stroke='%23fff' stroke-width='3'/%3E%3Crect x='14' y='27' width='17' height='10' fill='%23fff'/%3E%3Cline x1='44' y1='32' x2='54' y2='32' stroke='%23fff' stroke-width='3'/%3E%3Cline x1='14' y1='32' x2='8' y2='32' stroke='%23fff' stroke-width='3'/%3E%3Cline x1='8' y1='24' x2='8' y2='40' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+/* ---------- Theme tokens (light default, dark via media query or [data-theme]) ---------- */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --subtle:#eef1f4; --text:#171b20; --muted:#58636f;
+  --border:#d8dee5; --border-strong:#aeb8c3; --accent:#0e7c86; --accent-ink:#ffffff; --accent-soft:#dff2f3;
+  --warn:#8a5300; --warn-bg:#fff3dc; --warn-border:#f0c987;
+  --danger:#b3261e; --danger-bg:#fdeceb; --ok:#1b7f3b; --ok-bg:#e6f5ea; --info-bg:#e8f0fb; --info:#1d4f91;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.05);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#101316; --surface:#1a1e23; --subtle:#232830; --text:#e8ecf0; --muted:#9aa6b2;
+    --border:#2e353d; --border-strong:#4a5460; --accent:#37b3be; --accent-ink:#06191b; --accent-soft:#16363a;
+    --warn:#f1b660; --warn-bg:#33270f; --warn-border:#6b4d17;
+    --danger:#ff8a80; --danger-bg:#3a1a18; --ok:#6fd48c; --ok-bg:#15301d; --info-bg:#172a42; --info:#8db8f0;
+    --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101316; --surface:#1a1e23; --subtle:#232830; --text:#e8ecf0; --muted:#9aa6b2;
+  --border:#2e353d; --border-strong:#4a5460; --accent:#37b3be; --accent-ink:#06191b; --accent-soft:#16363a;
+  --warn:#f1b660; --warn-bg:#33270f; --warn-border:#6b4d17;
+  --danger:#ff8a80; --danger-bg:#3a1a18; --ok:#6fd48c; --ok-bg:#15301d; --info-bg:#172a42; --info:#8db8f0;
+  --shadow:none; color-scheme:dark;
+}
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+h1,h2,h3{line-height:1.2;margin:0}
+h2{font-size:1.15rem}
+h3{font-size:1rem}
+p{margin:.4em 0}
+button,input,select,textarea{font:inherit;color:inherit}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+.mono{font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+
+/* ---------- Layout ---------- */
+.app-header{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));display:flex;align-items:center;gap:10px}
+.app-header h1{font-size:1.05rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{max-width:1040px;margin:0 auto;padding:14px 14px calc(88px + env(safe-area-inset-bottom))}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{flex:1;border:0;background:none;padding:10px 4px 9px;font-size:.78rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;position:relative}
+.tabs button .ic{font-size:1.25rem;line-height:1}
+.tabs button[aria-selected="true"]{color:var(--accent);font-weight:600}
+.tabs button .dot{position:absolute;top:6px;left:calc(50% + 8px);background:var(--danger);color:#fff;border-radius:9px;min-width:16px;height:16px;font-size:.65rem;line-height:16px;text-align:center;padding:0 4px}
+@media (min-width:760px){
+  .tabs{position:static;border:0;background:none;max-width:1040px;margin:0 auto;padding:10px 14px 0;gap:6px}
+  .tabs button{flex:0 0 auto;flex-direction:row;gap:8px;padding:8px 16px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:.95rem}
+  .tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .tabs button .dot{position:static;margin-left:2px}
+  main{padding-bottom:40px}
+}
+.grid2{display:grid;gap:14px}
+@media (min-width:860px){.grid2{grid-template-columns:1fr 1fr;align-items:start}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow);margin-bottom:14px}
+.card>h2,.card>.card-head{margin-bottom:10px}
+.card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:space-between}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>*{flex:1 1 140px;min-width:0}
+.row>.fit{flex:0 0 auto}
+.sec-title{margin:18px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+
+/* ---------- Controls ---------- */
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.88rem;color:var(--muted)}
+label.f>span.l{font-weight:500}
+input[type=text],input[type=number],input[type=date],input[type=time],select,textarea{width:100%;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:9px 10px;color:var(--text);font-size:1rem;min-height:42px}
+textarea{min-height:64px;resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+label.chk{display:flex;gap:8px;align-items:center;font-size:.95rem;color:var(--text);min-height:36px}
+label.chk input{width:20px;height:20px;accent-color:var(--accent)}
+.btn{border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 14px;min-height:40px;cursor:pointer;font-weight:500}
+.btn:hover{background:var(--subtle)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.sm{min-height:34px;padding:4px 10px;font-size:.88rem}
+.btn.ok{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.seg{display:flex;flex-wrap:wrap;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{flex:1 1 auto;border:0;border-right:1px solid var(--border);background:none;padding:9px 10px;cursor:pointer;min-height:40px;font-size:.92rem;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:5px 12px;cursor:pointer;font-size:.9rem}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.78rem;font-weight:600;background:var(--subtle);color:var(--muted);border:1px solid var(--border);white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.pill.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-border)}
+.pill.bad{background:var(--danger-bg);color:var(--danger);border-color:transparent}
+.pill.info{background:var(--info-bg);color:var(--info);border-color:transparent}
+
+/* ---------- Callouts ---------- */
+.callout{border-radius:10px;padding:10px 12px;border:1px solid var(--border);background:var(--info-bg);color:var(--text);margin:10px 0;font-size:.92rem}
+.callout.warn{background:var(--warn-bg);border-color:var(--warn-border)}
+.callout.bad{background:var(--danger-bg);border-color:var(--danger)}
+.callout strong.lead{display:block;margin-bottom:2px}
+.callout ul{margin:4px 0 0;padding-left:18px}
+
+/* ---------- Props & tables ---------- */
+dl.props{margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0}
+dl.props dt,dl.props dd{margin:0;padding:8px 0;border-bottom:1px solid var(--border)}
+dl.props dt{color:var(--muted);font-size:.9rem;padding-right:12px}
+dl.props dd{text-align:right;font-weight:600;font-variant-numeric:tabular-nums;max-width:60vw;overflow-wrap:anywhere}
+.tbl-wrap{overflow-x:auto;margin:6px 0}
+table.tbl{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+table.tbl th,table.tbl td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+table.tbl th:first-child,table.tbl td:first-child{text-align:left}
+table.tbl th{color:var(--muted);font-weight:600;font-size:.8rem}
+table.tbl td.flag-warn{color:var(--warn);font-weight:600;text-align:left}
+table.tbl tr.mine td{background:var(--accent-soft)}
+@media (max-width:480px){dl.props{grid-template-columns:1fr}dl.props dt{border-bottom:0;padding:8px 0 0}dl.props dd{text-align:left;max-width:none;padding-top:2px}}
+.steplist{margin:6px 0}.steprow{border-top:1px solid var(--border);padding:8px 0}.steprow.cur{background:var(--accent-soft);margin:0 -8px;padding:8px}.sr-head{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:2px}
+.stepcard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 4px;line-height:1.15;font-size:.9rem}
+.frac>span:first-child{border-bottom:1px solid var(--text);padding:0 4px}
+.eq{margin:8px 0;padding:8px 10px;background:var(--subtle);border-radius:8px;overflow-x:auto;font-size:.95rem}
+
+/* ---------- Syringe ---------- */
+.syr{width:100%;max-width:900px;display:block}
+.syr text{font-family:inherit;fill:var(--text)}
+.syr .tick-lbl{fill:var(--muted)}
+.syr .barrel{fill:var(--subtle);stroke:var(--border-strong);stroke-width:1.5}
+.syr .liquid{fill:var(--accent)}
+.syr .part{fill:var(--border);stroke:var(--border-strong)}
+.syr .stopper{fill:var(--muted)}
+.syr .rod{fill:var(--border);stroke:var(--border)}
+.syr .needle-line{stroke:var(--border-strong);stroke-width:2}
+.syr .tick{stroke:var(--border-strong);stroke-width:.75}
+.syr .tick.major{stroke:var(--muted);stroke-width:1.25}
+.syr.compact{max-width:520px}
+
+/* ---------- Today / planner / inventory items ---------- */
+.dose{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:12px;margin-bottom:10px;box-shadow:var(--shadow)}
+.dose.done{border-left:5px solid var(--ok)}
+.dose.skipped{border-left:5px solid var(--border-strong);opacity:.8}
+.dose.missed{border-left:5px solid var(--warn)}
+.dose.pending{border-left:5px solid var(--accent)}
+.dose-top{display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap}
+.dose-time{font-weight:700;font-size:1.05rem}
+.dose-name{font-weight:600}
+.dose-big{font-size:1.6rem;font-weight:700;color:var(--accent);line-height:1.1}
+.dose-meta{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:.88rem;color:var(--muted);margin:4px 0}
+.dose-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.datebar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.datebar .title{flex:1;min-width:140px;font-weight:700;font-size:1.1rem}
+.item{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--surface)}
+.item-head{display:flex;gap:8px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.item-title{font-weight:700}
+.item-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.bar{height:8px;background:var(--subtle);border-radius:5px;overflow:hidden;margin:6px 0;border:1px solid var(--border)}
+.bar>i{display:block;height:100%;background:var(--accent)}
+.bar.low>i{background:var(--danger)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dh{font-size:.72rem;color:var(--muted);text-align:center;padding:2px 0}
+.cal button{border:1px solid var(--border);background:var(--surface);border-radius:8px;min-height:56px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:.78rem;text-align:left}
+.cal button.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cal button.off{opacity:.45}
+.cal button.alldone{background:var(--ok-bg)}
+.cal button .n{font-weight:700;font-size:.85rem}
+.cal button .c{color:var(--muted);font-variant-numeric:tabular-nums}
+.empty{text-align:center;color:var(--muted);padding:24px 8px}
+.kv{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:.9rem}
+.kv b{font-variant-numeric:tabular-nums}
+.footer{margin:24px 0 8px;font-size:.82rem;color:var(--muted);text-align:center}
+
+/* ---------- Dialog & toast ---------- */
+dialog{border:1px solid var(--border-strong);border-radius:14px;background:var(--surface);color:var(--text);padding:0;width:min(640px,calc(100vw - 20px));max-height:calc(100vh - 20px);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.dlg{padding:16px;display:flex;flex-direction:column;gap:12px}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dlg-foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;position:sticky;bottom:0;background:var(--surface);padding-top:8px}
+.formerr{color:var(--danger);font-weight:600;font-size:.92rem}
+.stepbox{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--subtle)}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:100;max-width:92vw;font-size:.92rem;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.show{opacity:1}
+@media (min-width:760px){#toast{bottom:24px}}
+@media print{.tabs,.app-header,.dose-actions,.item-actions{display:none!important}}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <h1>Peptide Calculator &amp; Planner</h1>
+  <span id="store-warn" class="pill warn hidden" title="Browser storage is unavailable; data will be lost on close. Use Export.">Not saving</span>
+  <button class="btn sm" data-action="open-settings" aria-label="Settings and backup">⚙ Settings</button>
+</header>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="calc"><span class="ic">🧮</span>Calculator</button>
+  <button role="tab" data-tab="today"><span class="ic">✅</span>Today<span class="dot hidden" id="dot-today"></span></button>
+  <button role="tab" data-tab="planner"><span class="ic">📅</span>Planner</button>
+  <button role="tab" data-tab="inventory"><span class="ic">📦</span>Inventory<span class="dot hidden" id="dot-inv"></span></button>
+</nav>
+<main id="view"></main>
+<dialog id="dlg"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script id="core">
+/* =====================================================================
+ * PepCore: pure logic, no DOM access. Tested in Node (see test/core.test.js).
+ * Everything here works on plain data objects (the app "state").
+ * ===================================================================== */
+const PepCore = (function () {
+  'use strict';
+
+  const SCHEMA_VERSION = 2; // v2: titration steps may override frequency / dose times and carry per-slot doses
+
+  // ---------- Reference data (vial sizes / compositions only; never doses) ----------
+  const SYRINGES = [
+    { id: 'u100-0.3', label: 'U-100 · 0.3 mL', upm: 100, cap: 30 },
+    { id: 'u100-0.5', label: 'U-100 · 0.5 mL', upm: 100, cap: 50 },
+    { id: 'u100-1', label: 'U-100 · 1 mL', upm: 100, cap: 100 },
+    { id: 'u40-1', label: 'U-40 · 1 mL', upm: 40, cap: 40 },
+  ];
+  const DEFAULT_SYRINGE_ID = 'u100-1';
+  const PRESETS = [
+    { name: 'BPC-157', vials: [5, 10] },
+    { name: 'TB-500', vials: [5, 10] },
+    { name: 'Ipamorelin', vials: [5] },
+    { name: 'CJC-1295 (no DAC)', vials: [2, 5] },
+    { name: 'Semaglutide', vials: [3, 5] },
+    { name: 'Tirzepatide', vials: [5, 10, 15] },
+    { name: 'GHK-Cu', vials: [50] },
+    { name: 'PT-141', vials: [10] },
+    { name: 'Sermorelin', vials: [5] },
+    { name: 'MOTS-c', vials: [10] },
+    { name: 'AOD-9604', vials: [5] },
+  ];
+  const CUSTOM = 'Custom peptide';
+  const CUSTOM_BLEND = 'custom';
+  const BLENDS = [
+    { id: 'bpc-tb-5', label: 'BPC-157 / TB-500 (5 + 5 mg)', title: 'BPC-157 / TB-500', comps: [{ name: 'BPC-157', mg: 5 }, { name: 'TB-500', mg: 5 }] },
+    { id: 'bpc-tb-10', label: 'BPC-157 / TB-500 (10 + 10 mg)', title: 'BPC-157 / TB-500', comps: [{ name: 'BPC-157', mg: 10 }, { name: 'TB-500', mg: 10 }] },
+    { id: 'cjc-ipa-5', label: 'CJC-1295 (no DAC) / Ipamorelin (5 + 5 mg)', title: 'CJC-1295 (no DAC) / Ipamorelin', comps: [{ name: 'CJC-1295 (no DAC)', mg: 5 }, { name: 'Ipamorelin', mg: 5 }] },
+    { id: 'cjc-ipa-2', label: 'CJC-1295 (no DAC) / Ipamorelin (2 + 2 mg)', title: 'CJC-1295 (no DAC) / Ipamorelin', comps: [{ name: 'CJC-1295 (no DAC)', mg: 2 }, { name: 'Ipamorelin', mg: 2 }] },
+    { id: 'glow', label: 'GLOW (GHK-Cu 50 + BPC-157 10 + TB-500 10 mg)', title: 'GLOW', comps: [{ name: 'GHK-Cu', mg: 50 }, { name: 'BPC-157', mg: 10 }, { name: 'TB-500', mg: 10 }] },
+    { id: 'klow', label: 'KLOW (GHK-Cu 50 + BPC-157 10 + TB-500 10 + KPV 10 mg)', title: 'KLOW', comps: [{ name: 'GHK-Cu', mg: 50 }, { name: 'BPC-157', mg: 10 }, { name: 'TB-500', mg: 10 }, { name: 'KPV', mg: 10 }] },
+  ];
+  const LADDER = [25, 50, 100, 150, 250, 300, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000];
+
+  // ---------- Number helpers ----------
+  function num(s) { const n = parseFloat(s); return Number.isFinite(n) ? n : NaN; }
+  function fmt(n, d) {
+    if (d === undefined) d = 2;
+    if (!Number.isFinite(n)) return '—';
+    const digits = n !== 0 && Math.abs(n) < 0.01 ? 4 : d;
+    const s = n.toFixed(digits);
+    return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s;
+  }
+  function syringeById(id) { return SYRINGES.find(function (s) { return s.id === id; }) || SYRINGES.find(function (s) { return s.id === DEFAULT_SYRINGE_ID; }); }
+  function uid() { return Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4); }
+
+  // ---------- Calculator math (ported 1:1 from the original Page) ----------
+  function compute(vialMg, waterMl, doseMcg, upm) {
+    const concMgMl = vialMg / waterMl;
+    const concMcgMl = concMgMl * 1000;
+    const volMl = doseMcg / concMcgMl;
+    return { concMgMl: concMgMl, concMcgMl: concMcgMl, mcgPerUnit: concMcgMl / upm, volMl: volMl, units: volMl * upm, doses: (vialMg * 1000) / doseMcg };
+  }
+  /** Per-component delivery for a draw of volMl from a vial of `comps` in waterMl. */
+  function blendDelivery(comps, waterMl, volMl, upm) {
+    return comps.map(function (c) {
+      const concMgMl = c.mg / waterMl;
+      const delivered = concMgMl * 1000 * volMl;
+      return { name: c.name, mg: c.mg, concMgMl: concMgMl, mcgPerUnit: (concMgMl * 1000) / upm, deliveredMcg: delivered, fullDoses: Math.floor((c.mg * 1000) / delivered + 1e-9) };
+    });
+  }
+  /** Water (mL) so that `doseMcg` of a `basisMg` vial measures exactly `targetUnits`. */
+  function waterForUnits(basisMg, doseMcg, targetUnits, upm) {
+    return ((basisMg * 1000) / doseMcg) * (targetUnits / upm);
+  }
+
+  // ---------- Dates: local calendar strings (YYYY-MM-DD). Never use toISOString() for these. ----------
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parseYmd(s) { const p = String(s).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2], 12, 0, 0); }
+  function addDays(s, n) { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); }
+  function diffDays(a, b) { return Math.round((parseYmd(b) - parseYmd(a)) / 864e5); }
+  function dow(s) { return parseYmd(s).getDay(); } // 0 = Sunday
+  function todayStr(now) { return ymd(now || new Date()); }
+  function isYmd(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && ymd(parseYmd(s)) === s; }
+
+  // ---------- Mixes (what is in the syringe) ----------
+  function basisIndex(comps, doseBy) {
+    if (doseBy === 'total') return -1;
+    const i = typeof doseBy === 'string' && doseBy[0] === 'c' ? parseInt(doseBy.slice(1), 10) : 0;
+    return Number.isFinite(i) && i >= 0 && i < comps.length ? i : 0;
+  }
+  function basisMg(comps, doseBy) {
+    const i = basisIndex(comps, doseBy);
+    return i < 0 ? comps.reduce(function (a, c) { return a + c.mg; }, 0) : comps[i].mg;
+  }
+  function mixTitle(comps) { return comps.map(function (c) { return c.name; }).join(' / '); }
+  function productKey(comps) { return comps.map(function (c) { return String(c.name).trim().toLowerCase() + ':' + c.mg; }).join('|'); }
+
+  /** Where a protocol draws from: a reconstituted vial, an unopened stock item (planned BAC), or ad hoc numbers. */
+  function resolveMix(state, p) {
+    if (p.vialId) {
+      const v = state.vials.find(function (x) { return x.id === p.vialId; });
+      if (v) return { comps: v.comps, bacMl: v.bacMl, vial: v, stock: null, source: 'vial' };
+    }
+    if (p.stockId) {
+      const s = state.stock.find(function (x) { return x.id === p.stockId; });
+      if (s) return { comps: s.comps, bacMl: p.bacMl, vial: null, stock: s, source: 'stock' };
+    }
+    return { comps: p.comps || [], bacMl: p.bacMl, vial: null, stock: null, source: 'adhoc' };
+  }
+  function mixValid(mix) {
+    return mix.comps.length > 0 && mix.comps.every(function (c) { return c.mg > 0; }) && mix.bacMl > 0;
+  }
+  function unitsFor(mix, doseBy, doseMcg, syringeId) {
+    if (!mixValid(mix) || !(doseMcg > 0)) return NaN;
+    return compute(basisMg(mix.comps, doseBy), mix.bacMl, doseMcg, syringeById(syringeId).upm).units;
+  }
+  /** mg removed from each component for a dose measured in mcg of the dose-by basis. */
+  function deductions(mix, doseBy, doseMcg) {
+    const b = basisMg(mix.comps, doseBy);
+    const ratio = doseMcg / 1000 / b;
+    return mix.comps.map(function (c) { return c.mg * ratio; });
+  }
+
+  // ---------- Protocol schedule ----------
+  function cycleEnd(p) { return addDays(p.start, p.weeks * 7 - 1); }
+  function weekOf(p, date) { const d = diffDays(p.start, date); return d < 0 ? 0 : Math.floor(d / 7) + 1; }
+  /** The titration step covering `date`, or null (before/after the cycle, or a week with no step). */
+  function stepFor(p, date) {
+    const w = weekOf(p, date);
+    if (w < 1 || w > p.weeks) return null;
+    return p.steps.find(function (st) { return w >= st.from && w <= st.to; }) || null;
+  }
+  /** Effective frequency / dose times for a step: its own override, else the protocol default. */
+  function freqFor(p, step) { return (step && step.freq) || p.freq || { type: 'daily', days: [], n: 2 }; }
+  function timesFor(p, step) { return step && step.times && step.times.length ? step.times : p.times; }
+  /** Dose (mcg) for one time slot on a date. A step may give each slot its own dose (slotDoses); otherwise all slots use doseMcg. */
+  function doseForSlot(p, date, slot) {
+    const st = stepFor(p, date);
+    if (!st) return null;
+    const sd = st.slotDoses && st.slotDoses[slot];
+    return sd > 0 ? sd : st.doseMcg;
+  }
+  /** Step-level default dose (first slot). */
+  function doseFor(p, date) { const st = stepFor(p, date); return st ? doseForSlot(p, date, 0) : null; }
+  function isScheduled(p, date) {
+    if (p.active === false) return false;
+    const d = diffDays(p.start, date);
+    if (d < 0 || d >= p.weeks * 7) return false;
+    const st = stepFor(p, date);
+    const f = freqFor(p, st);
+    if (f.type === 'weekdays') return (f.days || []).indexOf(dow(date)) >= 0;
+    // "every N days" counts from the start of the step when that step sets its own frequency, otherwise from the protocol start.
+    if (f.type === 'everyN') return (d - (st && st.freq ? (st.from - 1) * 7 : 0)) % Math.max(1, f.n | 0) === 0;
+    return true;
+  }
+  /** Approximate doses per week for a frequency and number of dose times per day. */
+  function dosesPerWeek(f, nTimes) {
+    const perDay = f.type === 'weekdays' ? (f.days || []).length / 7 : f.type === 'everyN' ? 1 / Math.max(1, f.n | 0) : 1;
+    return Math.round(perDay * 7 * nTimes * 10) / 10;
+  }
+  function logKey(protocolId, date, slot) { return protocolId + '|' + date + '|' + slot; }
+  function protocolStatus(p, date) {
+    if (p.active === false) return 'paused';
+    if (date < p.start) return 'upcoming';
+    if (date > cycleEnd(p)) return 'ended';
+    return 'active';
+  }
+  /** Step coverage problems for the editor/validation. Returns array of strings. */
+  function stepProblems(p) {
+    const out = [];
+    const st = p.steps.slice().sort(function (a, b) { return a.from - b.from; });
+    st.forEach(function (s, i) {
+      if (!(s.from >= 1) || !(s.to >= s.from)) out.push('Step ' + (i + 1) + ': weeks must run from a start of 1 or more to an end that is not before it.');
+      if (!(s.doseMcg > 0) || (s.slotDoses && s.slotDoses.some(function (d) { return !(d > 0); }))) out.push('Step ' + (i + 1) + ': enter a dose above 0' + (s.slotDoses ? ' for every time of day.' : '.'));
+      if (i > 0 && s.from <= st[i - 1].to) out.push('Steps overlap around week ' + s.from + '.');
+    });
+    const covered = [];
+    for (let w = 1; w <= p.weeks; w++) if (!p.steps.some(function (s) { return w >= s.from && w <= s.to; })) covered.push(w);
+    if (covered.length) out.push('No dose set for week' + (covered.length > 1 ? 's ' : ' ') + covered.join(', ') + ' (nothing will be scheduled then).');
+    return out;
+  }
+
+  /** All scheduled doses on one date (logged or not), sorted by time. */
+  function dosesOn(state, date) {
+    const out = [];
+    state.protocols.forEach(function (p) {
+      if (!isScheduled(p, date)) return;
+      const mix = resolveMix(state, p);
+      const step = stepFor(p, date);
+      timesFor(p, step).forEach(function (t, slot) {
+        const key = logKey(p.id, date, slot);
+        const log = state.logs[key] || null;
+        const base = doseForSlot(p, date, slot);
+        const doseMcg = log && log.doseMcg > 0 ? log.doseMcg : base;
+        out.push({
+          key: key, protocol: p, date: date, slot: slot, time: log && log.time ? log.time : t.time, label: t.label, mix: mix,
+          scheduledMcg: base, doseMcg: doseMcg, units: doseMcg > 0 ? unitsFor(mix, p.doseBy, doseMcg, p.syringeId) : NaN,
+          log: log, status: log ? log.status : 'pending',
+        });
+      });
+    });
+    out.sort(function (a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : a.protocol.name.localeCompare(b.protocol.name); });
+    return out;
+  }
+  /** Scheduled doses with no log, from `from` (inclusive) to the end of the last active cycle. */
+  function pendingDoses(state, from) {
+    let end = from;
+    state.protocols.forEach(function (p) { if (p.active !== false) { const e = cycleEnd(p); if (e > end) end = e; } });
+    const out = [];
+    const days = Math.min(diffDays(from, end), 1100);
+    for (let i = 0; i <= days; i++) {
+      const d = addDays(from, i);
+      dosesOn(state, d).forEach(function (x) { if (!x.log && x.doseMcg > 0) out.push(x); });
+    }
+    return out;
+  }
+
+  // ---------- Logging (ledger: every taken dose records exactly what it deducted, so edit/undo are exact) ----------
+  function pickNeedle(state, syringeId, preferredId) {
+    if (preferredId) { const n = state.needles.find(function (x) { return x.id === preferredId; }); if (n) return n; }
+    const ofType = state.needles.filter(function (x) { return x.type === syringeId; });
+    return ofType.find(function (x) { return x.count > 0; }) || ofType[0] || null;
+  }
+  function revertLog(state, key) {
+    const l = state.logs[key];
+    if (!l) return;
+    if (l.status === 'taken') {
+      const v = l.vialId ? state.vials.find(function (x) { return x.id === l.vialId; }) : null;
+      if (v && l.ded) l.ded.forEach(function (d, i) { v.remaining[i] += d; });
+      const n = l.needleId ? state.needles.find(function (x) { return x.id === l.needleId; }) : null;
+      if (n) n.count += 1;
+      const s = l.swabId ? state.swabs.find(function (x) { return x.id === l.swabId; }) : null;
+      if (s) s.count += 1;
+    }
+    delete state.logs[key];
+  }
+  /**
+   * entry: {protocolId, date, slot, status:'taken'|'skipped', doseMcg?, time?, note?, vialId? (override), useNeedle?, needleId? (override)}
+   * Replaces any existing log for the same slot (reverting its deductions first).
+   */
+  function setLog(state, entry) {
+    const p = state.protocols.find(function (x) { return x.id === entry.protocolId; });
+    if (!p) throw new Error('Protocol not found');
+    const key = logKey(entry.protocolId, entry.date, entry.slot);
+    revertLog(state, key);
+    const base = doseForSlot(p, entry.date, entry.slot);
+    const doseMcg = entry.doseMcg > 0 ? entry.doseMcg : base;
+    const mix = resolveMix(state, p);
+    const log = {
+      protocolId: p.id, date: entry.date, slot: entry.slot, status: entry.status, doseMcg: doseMcg > 0 ? doseMcg : null,
+      time: entry.time || (timesFor(p, stepFor(p, entry.date))[entry.slot] || { time: '08:00' }).time, note: entry.note || '', loggedAt: new Date().toISOString(),
+      units: doseMcg > 0 ? unitsFor(mix, p.doseBy, doseMcg, p.syringeId) : null,
+    };
+    if (entry.status === 'taken') {
+      const v = entry.vialId !== undefined ? (entry.vialId ? state.vials.find(function (x) { return x.id === entry.vialId; }) : null) : mix.vial;
+      if (v && doseMcg > 0) {
+        const vm = { comps: v.comps, bacMl: v.bacMl };
+        const ded = deductions(vm, p.doseBy, doseMcg);
+        ded.forEach(function (d, i) { v.remaining[i] -= d; });
+        log.vialId = v.id; log.ded = ded;
+      }
+      if (entry.useNeedle !== false && p.useNeedle !== false) {
+        const n = pickNeedle(state, p.syringeId, entry.needleId !== undefined ? entry.needleId : p.needleId);
+        if (n && n.count > 0) { n.count -= 1; log.needleId = n.id; }
+      }
+      if (state.settings.swabPerDose && entry.useNeedle !== false) {
+        const s = state.swabs.find(function (x) { return x.count > 0; });
+        if (s) { s.count -= 1; log.swabId = s.id; }
+      }
+    }
+    state.logs[key] = log;
+    return log;
+  }
+  function clearLog(state, key) { revertLog(state, key); }
+
+  // ---------- Inventory actions ----------
+  function addDaysFromNow(date, n) { return addDays(date, n); }
+  /** Protocols that could be pointed at a freshly mixed vial of this stock item (no vial yet, or their vial is finished). */
+  function linkableProtocols(state, stockItem) {
+    const key = productKey(stockItem.comps);
+    return state.protocols.filter(function (p) {
+      const cur = p.vialId ? state.vials.find(function (v) { return v.id === p.vialId; }) : null;
+      if (cur && cur.status !== 'finished') return false;
+      return p.stockId === stockItem.id || (!p.stockId && productKey(p.comps || []) === key) || (cur && productKey(cur.comps) === key);
+    });
+  }
+  /** Move one unopened vial to a reconstituted vial; deduct BAC water. Throws Error with a user-readable message. */
+  function reconstitute(state, o) {
+    const s = state.stock.find(function (x) { return x.id === o.stockId; });
+    if (!s) throw new Error('Stock item not found');
+    if (!(s.count >= 1)) throw new Error('No unopened vials left in this stock item');
+    if (!(o.bacMl > 0)) throw new Error('Enter how many mL of BAC water you are adding');
+    let bac = null;
+    if (o.bacId) {
+      bac = state.bac.find(function (x) { return x.id === o.bacId; });
+      if (bac && bac.remainingMl + 1e-9 < o.bacMl) throw new Error('That BAC water bottle only has ' + fmt(bac.remainingMl, 2) + ' mL left');
+    }
+    s.count -= 1;
+    if (bac) bac.remainingMl = Math.max(0, Math.round((bac.remainingMl - o.bacMl) * 1e6) / 1e6);
+    const v = {
+      id: uid(), name: s.name, productId: s.id, comps: s.comps.map(function (c) { return { name: c.name, mg: c.mg }; }),
+      remaining: s.comps.map(function (c) { return c.mg; }), bacMl: o.bacMl, mixedOn: o.mixedOn, expiry: o.expiry || null,
+      location: o.location !== undefined ? o.location : s.location, note: '', status: 'active',
+    };
+    state.vials.push(v);
+    let linked = 0;
+    if (o.linkProtocols) linkableProtocols(state, s).forEach(function (p) { p.vialId = v.id; linked++; });
+    return { vial: v, linked: linked };
+  }
+
+  // ---------- Projections ----------
+  function vialDoseCount(v, doseBy, doseMcg) {
+    if (!(doseMcg > 0)) return NaN;
+    const ded = deductions({ comps: v.comps }, doseBy, doseMcg);
+    let n = Infinity;
+    ded.forEach(function (d, i) { n = Math.min(n, v.remaining[i] / d); });
+    return Math.floor(Math.max(0, n) + 1e-9);
+  }
+  /** Walk the unlogged schedule against a vial's remaining mg. */
+  function projectVial(state, vialId, from) {
+    const v = state.vials.find(function (x) { return x.id === vialId; });
+    if (!v) return null;
+    const rem = v.remaining.slice();
+    const pend = pendingDoses(state, from).filter(function (d) { return d.mix.vial && d.mix.vial.id === vialId; });
+    const res = { hasSchedule: pend.length > 0, runsOutOn: null, dosesLeft: 0, lastFullDoseOn: null, coversSchedule: true, nextDoseMcg: null, dosesAtNextDose: NaN, leftoverMg: null };
+    if (!pend.length) return res;
+    res.nextDoseMcg = pend[0].doseMcg;
+    res.dosesAtNextDose = vialDoseCount(v, pend[0].protocol.doseBy, pend[0].doseMcg);
+    for (let i = 0; i < pend.length; i++) {
+      const d = pend[i];
+      const ded = deductions({ comps: v.comps }, d.protocol.doseBy, d.doseMcg);
+      if (ded.some(function (x, k) { return rem[k] - x < -1e-9; })) { res.runsOutOn = d.date; res.coversSchedule = false; break; }
+      ded.forEach(function (x, k) { rem[k] -= x; });
+      res.dosesLeft++; res.lastFullDoseOn = d.date;
+    }
+    res.leftoverMg = rem;
+    return res;
+  }
+  function neededType(p) { return p.syringeId; }
+  /** Needle supply of one syringe type (all stock items of that type pooled). */
+  function projectNeedleType(state, type, from) {
+    const pool = state.needles.filter(function (n) { return n.type === type; }).reduce(function (a, n) { return a + n.count; }, 0);
+    const pend = pendingDoses(state, from).filter(function (d) { return d.protocol.useNeedle !== false && neededType(d.protocol) === type; });
+    return simulateCount(pool, pend);
+  }
+  function projectSwabs(state, from) {
+    if (!state.settings.swabPerDose) return { hasSchedule: false, runsOutOn: null, covered: 0 };
+    const pool = state.swabs.reduce(function (a, n) { return a + n.count; }, 0);
+    return simulateCount(pool, pendingDoses(state, from));
+  }
+  function simulateCount(pool, pend) {
+    const res = { hasSchedule: pend.length > 0, runsOutOn: null, covered: 0 };
+    let left = pool;
+    for (let i = 0; i < pend.length; i++) {
+      if (left < 1) { res.runsOutOn = pend[i].date; return res; }
+      left -= 1; res.covered++;
+    }
+    return res;
+  }
+  /** Whole supply of a product (active vials + unopened stock) against every schedule that draws on it. */
+  function projectSupply(state, stockItem, from) {
+    const key = productKey(stockItem.comps);
+    const pool = stockItem.comps.map(function (c) { return c.mg * stockItem.count; });
+    state.vials.forEach(function (v) { if (v.status === 'active' && productKey(v.comps) === key) v.remaining.forEach(function (r, i) { pool[i] += Math.max(0, r); }); });
+    const pend = pendingDoses(state, from).filter(function (d) { return productKey(d.mix.comps) === key; });
+    const res = { hasSchedule: pend.length > 0, runsOutOn: null, dosesCovered: 0 };
+    for (let i = 0; i < pend.length; i++) {
+      const ded = deductions({ comps: stockItem.comps }, pend[i].protocol.doseBy, pend[i].doseMcg);
+      if (ded.some(function (x, k) { return pool[k] - x < -1e-9; })) { res.runsOutOn = pend[i].date; return res; }
+      ded.forEach(function (x, k) { pool[k] -= x; });
+      res.dosesCovered++;
+    }
+    return res;
+  }
+  function vialExpiryState(v, today) {
+    if (!v.expiry) return null;
+    const d = diffDays(today, v.expiry);
+    return d < 0 ? 'expired' : d <= 3 ? 'soon' : 'ok';
+  }
+  /** Items at/below their reorder threshold or projected to run out soon. */
+  function lowStock(state, today) {
+    const out = [];
+    const lead = state.settings.leadDays;
+    const soon = function (date) { return date && diffDays(today, date) <= lead; };
+    state.stock.forEach(function (s) {
+      const proj = projectSupply(state, s, today);
+      if (s.reorderAt !== null && s.count <= s.reorderAt) out.push({ kind: 'stock', id: s.id, label: s.name, level: s.count <= 0 ? 'out' : 'low', reason: s.count + ' unopened left (reorder at ' + s.reorderAt + ')' });
+      else if (soon(proj.runsOutOn)) out.push({ kind: 'stock', id: s.id, label: s.name, level: 'soon', reason: 'supply projected to run out on ' + proj.runsOutOn });
+    });
+    state.bac.forEach(function (b) {
+      if (b.reorderAt !== null && b.remainingMl <= b.reorderAt) out.push({ kind: 'bac', id: b.id, label: b.label || 'BAC water', level: b.remainingMl <= 0 ? 'out' : 'low', reason: fmt(b.remainingMl, 1) + ' mL left (reorder at ' + b.reorderAt + ' mL)' });
+    });
+    const types = {};
+    state.needles.forEach(function (n) { types[n.type] = true; });
+    state.needles.forEach(function (n) {
+      if (n.reorderAt !== null && n.count <= n.reorderAt) out.push({ kind: 'needle', id: n.id, label: needleLabel(n), level: n.count <= 0 ? 'out' : 'low', reason: n.count + ' left (reorder at ' + n.reorderAt + ')' });
+    });
+    Object.keys(types).forEach(function (t) {
+      const pr = projectNeedleType(state, t, today);
+      if (soon(pr.runsOutOn) && !out.some(function (o) { return o.kind === 'needle' && state.needles.find(function (n) { return n.id === o.id && n.type === t; }); })) {
+        out.push({ kind: 'needle', id: (state.needles.find(function (n) { return n.type === t; }) || {}).id, label: syringeById(t).label + ' syringes', level: 'soon', reason: 'projected to run out on ' + pr.runsOutOn });
+      }
+    });
+    state.swabs.forEach(function (s) {
+      if (s.reorderAt !== null && s.count <= s.reorderAt) out.push({ kind: 'swab', id: s.id, label: s.label || 'Alcohol swabs', level: s.count <= 0 ? 'out' : 'low', reason: s.count + ' left (reorder at ' + s.reorderAt + ')' });
+    });
+    state.vials.filter(function (v) { return v.status === 'active'; }).forEach(function (v) {
+      const pr = projectVial(state, v.id, today);
+      const ex = vialExpiryState(v, today);
+      if (ex === 'expired') out.push({ kind: 'vial', id: v.id, label: v.name, level: 'out', reason: 'passed the expiry date you set (' + v.expiry + ')' });
+      else if (ex === 'soon') out.push({ kind: 'vial', id: v.id, label: v.name, level: 'soon', reason: 'reaches the expiry date you set on ' + v.expiry });
+      if (pr && pr.hasSchedule && (!pr.coversSchedule && (soon(pr.runsOutOn) || pr.dosesLeft <= state.settings.vialLowDoses))) {
+        out.push({ kind: 'vial', id: v.id, label: v.name, level: 'soon', reason: 'vial runs out around ' + pr.runsOutOn + ' (' + pr.dosesLeft + ' scheduled doses left)' });
+      }
+    });
+    const rank = { out: 0, low: 1, soon: 2 };
+    out.sort(function (a, b) { return rank[a.level] - rank[b.level]; });
+    return out;
+  }
+  function needleLabel(n) { return syringeById(n.type).label + (n.label ? ' · ' + n.label : ''); }
+
+  // ---------- State: defaults, normalising, validating ----------
+  function defaultCalc() {
+    return {
+      mode: 'single', peptide: 'BPC-157', customName: '', vialMg: '5', blendId: 'bpc-tb-5',
+      comps: [{ name: 'BPC-157', mg: '5' }, { name: 'TB-500', mg: '5' }], doseBy: 'c0', water: '2', dose: '250', doseUnit: 'mcg',
+      syringeId: DEFAULT_SYRINGE_ID, targetUnits: '10',
+    };
+  }
+  function defaultState() {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      settings: { expiryDays: 28, leadDays: 14, vialLowDoses: 3, swabPerDose: false, theme: 'auto' },
+      meta: { lastExport: null },
+      calc: defaultCalc(), stock: [], vials: [], bac: [], needles: [], swabs: [], protocols: [], logs: {},
+    };
+  }
+  function nnum(v) { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? n : null; }
+  function str(v) { return typeof v === 'string' ? v : v == null ? '' : String(v); }
+  function normComps(a) {
+    if (!Array.isArray(a)) return [];
+    return a.slice(0, 4).map(function (c) { return { name: str(c && c.name), mg: nnum(c && c.mg) || 0 }; });
+  }
+  function normFreq(f) {
+    f = f && typeof f === 'object' ? f : {};
+    return { type: ['daily', 'weekdays', 'everyN'].indexOf(f.type) >= 0 ? f.type : 'daily', days: Array.isArray(f.days) ? f.days.map(Number).filter(function (n) { return n >= 0 && n <= 6; }) : [], n: Math.max(1, nnum(f.n) || 2) };
+  }
+  /** Returns a cleaned times array, or null when the input is not a non-empty array. */
+  function normTimes(a) {
+    if (!Array.isArray(a) || !a.length) return null;
+    return a.slice(0, 6).map(function (t) { return { label: str(t && t.label), time: /^\d{2}:\d{2}$/.test(str(t && t.time)) ? t.time : '08:00' }; });
+  }
+  /** Validate and normalise untrusted data (import or localStorage). Throws Error with a readable message. */
+  function normalizeState(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('That file is not a Peptide app backup.');
+    if (typeof raw.schemaVersion !== 'number') throw new Error('Missing schemaVersion; this does not look like a Peptide app backup.');
+    if (raw.schemaVersion > SCHEMA_VERSION) throw new Error('This backup was made by a newer version of the app.');
+    const d = defaultState();
+    const s = {
+      schemaVersion: SCHEMA_VERSION,
+      settings: Object.assign({}, d.settings, raw.settings && typeof raw.settings === 'object' ? raw.settings : {}),
+      meta: { lastExport: raw.meta && raw.meta.lastExport ? str(raw.meta.lastExport) : null },
+      calc: Object.assign(defaultCalc(), raw.calc && typeof raw.calc === 'object' ? raw.calc : {}),
+      stock: [], vials: [], bac: [], needles: [], swabs: [], protocols: [], logs: {},
+    };
+    const arr = function (k) { return Array.isArray(raw[k]) ? raw[k] : []; };
+    s.settings.expiryDays = nnum(s.settings.expiryDays) || 28;
+    s.settings.leadDays = nnum(s.settings.leadDays) === null ? 14 : nnum(s.settings.leadDays);
+    s.settings.vialLowDoses = nnum(s.settings.vialLowDoses) === null ? 3 : nnum(s.settings.vialLowDoses);
+    s.settings.swabPerDose = !!s.settings.swabPerDose;
+    if (['auto', 'light', 'dark'].indexOf(s.settings.theme) < 0) s.settings.theme = 'auto';
+    if (!Array.isArray(s.calc.comps) || s.calc.comps.length < 2) s.calc.comps = defaultCalc().comps;
+    arr('stock').forEach(function (x) {
+      if (!x || !x.id) return;
+      s.stock.push({ id: str(x.id), name: str(x.name), comps: normComps(x.comps), count: Math.max(0, nnum(x.count) || 0), location: str(x.location), reorderAt: nnum(x.reorderAt), note: str(x.note) });
+    });
+    arr('vials').forEach(function (x) {
+      if (!x || !x.id) return;
+      const comps = normComps(x.comps);
+      const rem = Array.isArray(x.remaining) ? x.remaining.map(function (r) { return nnum(r) || 0; }) : comps.map(function (c) { return c.mg; });
+      while (rem.length < comps.length) rem.push(0);
+      s.vials.push({ id: str(x.id), name: str(x.name), productId: x.productId ? str(x.productId) : null, comps: comps, remaining: rem.slice(0, comps.length), bacMl: nnum(x.bacMl) || 0,
+        mixedOn: isYmd(x.mixedOn) ? x.mixedOn : null, expiry: isYmd(x.expiry) ? x.expiry : null, location: str(x.location), note: str(x.note), status: x.status === 'finished' ? 'finished' : 'active' });
+    });
+    arr('bac').forEach(function (x) {
+      if (!x || !x.id) return;
+      s.bac.push({ id: str(x.id), label: str(x.label), mlEach: nnum(x.mlEach) || 0, bottles: nnum(x.bottles) || 0, remainingMl: Math.max(0, nnum(x.remainingMl) || 0), reorderAt: nnum(x.reorderAt) });
+    });
+    arr('needles').forEach(function (x) {
+      if (!x || !x.id) return;
+      s.needles.push({ id: str(x.id), type: SYRINGES.some(function (y) { return y.id === x.type; }) ? x.type : DEFAULT_SYRINGE_ID, label: str(x.label), count: Math.max(0, nnum(x.count) || 0), reorderAt: nnum(x.reorderAt) });
+    });
+    arr('swabs').forEach(function (x) {
+      if (!x || !x.id) return;
+      s.swabs.push({ id: str(x.id), label: str(x.label), count: Math.max(0, nnum(x.count) || 0), reorderAt: nnum(x.reorderAt) });
+    });
+    arr('protocols').forEach(function (x) {
+      if (!x || !x.id || !isYmd(x.start)) return;
+      const times = normTimes(x.times) || [{ label: 'AM', time: '08:00' }];
+      // v1 steps had only {from,to,doseMcg}; the v2 fields default to null (= inherit the protocol schedule, one dose for every slot).
+      const steps = (Array.isArray(x.steps) ? x.steps : []).map(function (st) {
+        const doseMcg = nnum(st && st.doseMcg) || 0;
+        const stimes = st && normTimes(st.times);
+        const effLen = (stimes || times).length;
+        let slotDoses = null;
+        if (st && Array.isArray(st.slotDoses) && st.slotDoses.length) {
+          slotDoses = [];
+          for (let i = 0; i < effLen; i++) { const d = nnum(st.slotDoses[i]); slotDoses.push(d > 0 ? d : doseMcg); }
+        }
+        return { from: nnum(st && st.from) || 0, to: nnum(st && st.to) || 0, doseMcg: doseMcg, freq: st && st.freq && typeof st.freq === 'object' ? normFreq(st.freq) : null, times: stimes || null, slotDoses: slotDoses };
+      });
+      s.protocols.push({
+        id: str(x.id), name: str(x.name) || 'Protocol', active: x.active !== false, vialId: x.vialId ? str(x.vialId) : null, stockId: x.stockId ? str(x.stockId) : null,
+        comps: normComps(x.comps), bacMl: nnum(x.bacMl) || 0, doseBy: str(x.doseBy) || 'c0', syringeId: SYRINGES.some(function (y) { return y.id === x.syringeId; }) ? x.syringeId : DEFAULT_SYRINGE_ID,
+        useNeedle: x.useNeedle !== false, needleId: x.needleId ? str(x.needleId) : null, start: x.start, weeks: Math.max(1, nnum(x.weeks) || 1), doseUnit: x.doseUnit === 'mg' ? 'mg' : 'mcg',
+        steps: steps, freq: normFreq(x.freq),
+        times: times, note: str(x.note),
+      });
+    });
+    if (raw.logs && typeof raw.logs === 'object' && !Array.isArray(raw.logs)) {
+      Object.keys(raw.logs).forEach(function (k) {
+        const l = raw.logs[k];
+        if (!l || typeof l !== 'object' || !isYmd(l.date) || (l.status !== 'taken' && l.status !== 'skipped')) return;
+        s.logs[k] = { protocolId: str(l.protocolId), date: l.date, slot: nnum(l.slot) || 0, status: l.status, doseMcg: nnum(l.doseMcg), time: str(l.time), note: str(l.note), loggedAt: str(l.loggedAt), units: nnum(l.units),
+          vialId: l.vialId ? str(l.vialId) : undefined, ded: Array.isArray(l.ded) ? l.ded.map(function (n) { return nnum(n) || 0; }) : undefined, needleId: l.needleId ? str(l.needleId) : undefined, swabId: l.swabId ? str(l.swabId) : undefined };
+      });
+    }
+    return s;
+  }
+
+  return {
+    SCHEMA_VERSION: SCHEMA_VERSION, SYRINGES: SYRINGES, DEFAULT_SYRINGE_ID: DEFAULT_SYRINGE_ID, PRESETS: PRESETS, CUSTOM: CUSTOM, CUSTOM_BLEND: CUSTOM_BLEND, BLENDS: BLENDS, LADDER: LADDER,
+    num: num, fmt: fmt, uid: uid, syringeById: syringeById, compute: compute, blendDelivery: blendDelivery, waterForUnits: waterForUnits,
+    pad: pad, ymd: ymd, parseYmd: parseYmd, addDays: addDays, diffDays: diffDays, dow: dow, todayStr: todayStr, isYmd: isYmd,
+    basisIndex: basisIndex, basisMg: basisMg, mixTitle: mixTitle, productKey: productKey, resolveMix: resolveMix, mixValid: mixValid, unitsFor: unitsFor, deductions: deductions,
+    cycleEnd: cycleEnd, weekOf: weekOf, doseFor: doseFor, doseForSlot: doseForSlot, stepFor: stepFor, freqFor: freqFor, timesFor: timesFor, dosesPerWeek: dosesPerWeek, isScheduled: isScheduled, logKey: logKey, protocolStatus: protocolStatus, stepProblems: stepProblems,
+    dosesOn: dosesOn, pendingDoses: pendingDoses, linkableProtocols: linkableProtocols, pickNeedle: pickNeedle, setLog: setLog, clearLog: clearLog, reconstitute: reconstitute,
+    vialDoseCount: vialDoseCount, projectVial: projectVial, projectNeedleType: projectNeedleType, projectSwabs: projectSwabs, projectSupply: projectSupply,
+    vialExpiryState: vialExpiryState, lowStock: lowStock, needleLabel: needleLabel, defaultCalc: defaultCalc, defaultState: defaultState, normalizeState: normalizeState,
+  };
+})();
+
+</script>
+<script id="app">
+/* =====================================================================
+ * App UI (vanilla JS). Sections: infra · syringe · calculator · today · planner · inventory · settings · init
+ * ===================================================================== */
+(function () {
+  'use strict';
+  const C = PepCore;
+  const num = C.num, fmt = C.fmt, syringeById = C.syringeById;
+  const STORAGE_KEY = 'peptide-app:v1';
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const DISCLAIMER = 'Math tool only, not medical advice. This app does arithmetic on the numbers you enter. It does not suggest doses, products or protocols. Verify every figure with a licensed clinician or pharmacist before use.';
+
+  // ---------- State & persistence ----------
+  let state = load();
+  let storageOk = true;
+  const ui = { tab: 'calc', date: C.todayStr(), calStart: mondayOf(C.todayStr()) };
+  let saveTimer = null;
+
+  function load() {
+    let raw = null;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const st = C.normalizeState(parsed);
+        if (parsed.schemaVersion < C.SCHEMA_VERSION) {
+          // Migrated (e.g. v1 -> v2). Keep the untouched original once, then write the upgraded copy.
+          try { if (!localStorage.getItem(STORAGE_KEY + ':pre-v' + C.SCHEMA_VERSION + '-backup')) localStorage.setItem(STORAGE_KEY + ':pre-v' + C.SCHEMA_VERSION + '-backup', raw); localStorage.setItem(STORAGE_KEY, JSON.stringify(st)); } catch (e2) { /* ignore */ }
+        }
+        return st;
+      }
+    } catch (e) {
+      console.warn('Could not read saved data', e);
+      try { if (raw) localStorage.setItem(STORAGE_KEY + ':corrupt-backup', raw); } catch (e2) { /* ignore */ }
+    }
+    return C.defaultState();
+  }
+  function save() {
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); storageOk = true; } catch (e) { storageOk = false; }
+    $('#store-warn').classList.toggle('hidden', storageOk);
+  }
+  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 250); }
+  window.addEventListener('pagehide', save);
+
+  // ---------- Small helpers ----------
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.from((r || document).querySelectorAll(s)); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function today() { return C.todayStr(); }
+  function mondayOf(date) { const d = C.dow(date); return C.addDays(date, -((d + 6) % 7)); }
+  function fmtDate(s, opts) {
+    if (!s) return '—';
+    const d = C.parseYmd(s);
+    const base = DAY_NAMES[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+    return opts && opts.year ? base + ' ' + d.getFullYear() : base;
+  }
+  function relDays(s) {
+    const n = C.diffDays(today(), s);
+    return n === 0 ? 'today' : n === 1 ? 'tomorrow' : n === -1 ? 'yesterday' : n > 0 ? 'in ' + n + ' days' : Math.abs(n) + ' days ago';
+  }
+  function fmtTime(t) {
+    const p = String(t).split(':'); let h = parseInt(p[0], 10); const m = p[1];
+    return ((h + 11) % 12 + 1) + ':' + m + ' ' + (h >= 12 ? 'PM' : 'AM');
+  }
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.t); toast.t = setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+  function seg(action, options, current, extra) {
+    return '<div class="seg" role="group">' + options.map(function (o) {
+      return '<button type="button" data-action="' + action + '" data-v="' + esc(o.v) + '"' + (extra || '') + ' aria-pressed="' + (String(o.v) === String(current)) + '">' + esc(o.l) + '</button>';
+    }).join('') + '</div>';
+  }
+  function callout(tone, lead, body) {
+    return '<div class="callout ' + (tone || '') + '">' + (lead ? '<strong class="lead">' + esc(lead) + '</strong>' : '') + body + '</div>';
+  }
+  function props(items) {
+    return '<dl class="props">' + items.map(function (i) { return '<dt>' + esc(i[0]) + '</dt><dd>' + esc(i[1]) + '</dd>'; }).join('') + '</dl>';
+  }
+  function table(cols, rows, mineIdx) {
+    return '<div class="tbl-wrap"><table class="tbl"><thead><tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r, i) {
+        return '<tr' + (i === mineIdx ? ' class="mine"' : '') + '>' + r.map(function (c) {
+          return typeof c === 'object' && c ? '<td class="flag-warn">' + esc(c.text) + '</td>' : '<td>' + esc(c) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function bacLabel(b) { return b.label || (fmt(b.mlEach, 1) + ' mL BAC water'); }
+
+  // ---------- Dialog plumbing ----------
+  const dlg = $('#dlg');
+  let dlgCtl = {};
+  function openDlg(html, ctl) { dlg.innerHTML = html; dlgCtl = ctl || {}; if (!dlg.open) dlg.showModal(); }
+  function closeDlg() { if (dlg.open) dlg.close(); }
+  dlg.addEventListener('close', function () { dlgCtl = {}; });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) closeDlg(); });
+  dlg.addEventListener('submit', function (e) { e.preventDefault(); if (dlgCtl.submit) dlgCtl.submit(e.target); });
+  dlg.addEventListener('input', function (e) { if (dlgCtl.input) dlgCtl.input(e); });
+  dlg.addEventListener('change', function (e) { if (dlgCtl.change) dlgCtl.change(e); });
+  function dlgShell(title, body, footer, err) {
+    return '<form class="dlg" novalidate><div class="dlg-head"><h2>' + esc(title) + '</h2><button type="button" class="btn sm" data-action="dlg-close" aria-label="Close">✕</button></div>' +
+      body + '<div class="formerr" id="dlg-err" role="alert">' + esc(err || '') + '</div><div class="dlg-foot">' + footer + '</div></form>';
+  }
+  function setDlgErr(msg) { const e = $('#dlg-err'); if (e) { e.textContent = msg || ''; if (msg) e.scrollIntoView({ block: 'nearest' }); } }
+
+  // Generic field builder for the simple inventory forms.
+  function fieldHTML(f) {
+    if (f.row) return '<div class="row">' + f.row.map(fieldHTML).join('') + '</div>';
+    const v = f.value == null ? '' : f.value;
+    const hint = f.hint ? '<span class="small">' + esc(f.hint) + '</span>' : '';
+    switch (f.type) {
+      case 'note': return '<div class="callout">' + f.html + '</div>';
+      case 'checkbox': return '<label class="chk"><input type="checkbox" name="' + f.name + '"' + (v ? ' checked' : '') + '> ' + esc(f.label) + '</label>';
+      case 'select': return '<label class="f"><span class="l">' + esc(f.label) + '</span><select name="' + f.name + '">' + f.options.map(function (o) {
+        return '<option value="' + esc(o.v) + '"' + (String(o.v) === String(v) ? ' selected' : '') + '>' + esc(o.l) + '</option>';
+      }).join('') + '</select>' + hint + '</label>';
+      case 'textarea': return '<label class="f"><span class="l">' + esc(f.label) + '</span><textarea name="' + f.name + '" placeholder="' + esc(f.placeholder || '') + '">' + esc(v) + '</textarea></label>';
+      case 'number': return '<label class="f"><span class="l">' + esc(f.label) + '</span><input type="number" inputmode="decimal" step="any" min="0" name="' + f.name + '" value="' + esc(v) + '" placeholder="' + esc(f.placeholder || '') + '">' + hint + '</label>';
+      default: return '<label class="f"><span class="l">' + esc(f.label) + '</span><input type="' + (f.type || 'text') + '" name="' + f.name + '" value="' + esc(v) + '" placeholder="' + esc(f.placeholder || '') + '">' + hint + '</label>';
+    }
+  }
+  function flatFields(fields) { return fields.reduce(function (a, f) { return a.concat(f.row ? f.row : [f]); }, []); }
+  function readForm(form, fields) {
+    const out = {};
+    flatFields(fields).forEach(function (f) {
+      if (f.type === 'note') return;
+      const el = form.elements[f.name]; if (!el) return;
+      if (f.type === 'checkbox') out[f.name] = el.checked;
+      else if (f.type === 'number') out[f.name] = el.value.trim() === '' ? null : parseFloat(el.value);
+      else out[f.name] = el.value.trim();
+    });
+    return out;
+  }
+  /** onSubmit(values) returns an error string to keep the dialog open, or nothing to close it. */
+  function openForm(o) {
+    const body = '<div class="stack">' + o.fields.map(fieldHTML).join('') + '</div>';
+    const foot = (o.extraFooter || '') + '<button type="button" class="btn" data-action="dlg-close">Cancel</button><button type="submit" class="btn primary">' + esc(o.submitLabel || 'Save') + '</button>';
+    openDlg(dlgShell(o.title, (o.intro || '') + body, foot), {
+      submit: function (form) {
+        const err = o.onSubmit(readForm(form, o.fields), form);
+        if (err) setDlgErr(err); else { closeDlg(); }
+      },
+    });
+  }
+
+  // ---------- Syringe SVG (geometry ported from the original Page; colours come from CSS variables) ----------
+  function syringeSvg(units, cap, compact) {
+    const x0 = 82, bw = 600, top = 44, bh = 44;
+    const frac = Math.max(0, Math.min(units / cap, 1));
+    const fillW = bw * frac;
+    const stopperX = x0 + fillW;
+    const minor = cap > 60 ? 2 : 1;
+    const major = cap <= 40 ? 5 : 10;
+    const anchor = frac > 0.85 ? 'end' : frac < 0.15 ? 'start' : 'middle';
+    const over = units > cap + 1e-9;
+    const markerLabel = over ? fmt(units) + ' units (over capacity)' : fmt(units) + ' units';
+    let ticks = '';
+    for (let u = 0; u <= cap + 1e-9; u += minor) {
+      const x = x0 + (u / cap) * bw;
+      const isMajor = Math.abs(u / major - Math.round(u / major)) < 1e-9;
+      ticks += '<line class="tick' + (isMajor ? ' major' : '') + '" x1="' + x + '" y1="' + (top + bh) + '" x2="' + x + '" y2="' + (top + bh + (isMajor ? 10 : 5)) + '"/>';
+      if (isMajor) ticks += '<text class="tick-lbl" x="' + x + '" y="' + (top + bh + 26) + '" text-anchor="middle" font-size="12">' + Math.round(u) + '</text>';
+    }
+    return '<svg class="syr' + (compact ? ' compact' : '') + '" viewBox="0 0 780 130" role="img" aria-label="Syringe filled to ' + fmt(Math.min(units, cap)) + ' of ' + cap + ' units">' +
+      '<line class="needle-line" x1="10" y1="' + (top + bh / 2) + '" x2="62" y2="' + (top + bh / 2) + '"/>' +
+      '<rect class="part" x="60" y="' + (top + bh / 2 - 9) + '" width="24" height="18" rx="3"/>' +
+      '<rect class="barrel" x="' + x0 + '" y="' + top + '" width="' + bw + '" height="' + bh + '" rx="4"/>' +
+      (fillW > 0 ? '<rect class="liquid" x="' + (x0 + 1) + '" y="' + (top + 1) + '" width="' + Math.max(fillW - 1, 0) + '" height="' + (bh - 2) + '"/>' : '') +
+      '<rect class="part" x="' + (x0 + bw) + '" y="' + (top - 10) + '" width="8" height="' + (bh + 20) + '" rx="2"/>' +
+      '<rect class="rod" x="' + stopperX + '" y="' + (top + bh / 2 - 4) + '" width="' + (760 - stopperX) + '" height="8"/>' +
+      '<rect class="stopper" x="' + stopperX + '" y="' + (top + 2) + '" width="10" height="' + (bh - 4) + '" rx="2"/>' +
+      '<rect class="part" x="758" y="' + (top - 6) + '" width="10" height="' + (bh + 12) + '" rx="3"/>' +
+      '<line x1="' + stopperX + '" y1="' + (top - 6) + '" x2="' + stopperX + '" y2="' + (top + 2) + '" style="stroke:var(--muted);stroke-width:1.5"/>' +
+      '<text x="' + Math.max(x0, Math.min(stopperX, x0 + bw)) + '" y="' + (top - 14) + '" text-anchor="' + anchor + '" font-size="14">' + esc(markerLabel) + '</text>' +
+      ticks + '</svg>';
+  }
+
+  // ---------- Calculator ----------
+  function calcModel() {
+    const c = state.calc;
+    const syringe = syringeById(c.syringeId);
+    const isBlend = c.mode === 'blend';
+    const preset = C.PRESETS.find(function (p) { return p.name === c.peptide; });
+    const singleName = c.peptide === C.CUSTOM ? (c.customName.trim() || 'your peptide') : c.peptide;
+    const vialNum = num(c.vialMg);
+    const bp = C.BLENDS.find(function (b) { return b.id === c.blendId; });
+    const blendTitle = bp ? bp.title : 'Custom blend';
+    const compNames = c.comps.map(function (x, i) { return x.name.trim() || 'Component ' + (i + 1); });
+    const compMg = c.comps.map(function (x) { return num(x.mg); });
+    const blendValid = compMg.length >= 2 && compMg.every(function (x) { return x > 0; });
+    const totalMg = compMg.reduce(function (a, b) { return a + b; }, 0);
+    const byTotal = c.doseBy === 'total';
+    const idxRaw = c.doseBy.charAt(0) === 'c' ? parseInt(c.doseBy.slice(1), 10) : -1;
+    const idx = byTotal ? -1 : idxRaw >= 0 && idxRaw < c.comps.length ? idxRaw : 0;
+    const basisLabel = !isBlend ? singleName : byTotal ? 'total blend' : (compNames[idx] || 'component');
+    const v = !isBlend ? vialNum : !blendValid ? NaN : byTotal ? totalMg : (compMg[idx] || NaN);
+    const w = num(c.water);
+    const dRaw = num(c.dose);
+    const doseMcg = c.doseUnit === 'mcg' ? dRaw : dRaw * 1000;
+    const ok = v > 0 && w > 0 && doseMcg > 0;
+    const r = ok ? C.compute(v, w, doseMcg, syringe.upm) : null;
+    const tu = num(c.targetUnits);
+    const okR = v > 0 && doseMcg > 0 && tu > 0;
+    const waterNeeded = okR ? C.waterForUnits(v, doseMcg, tu, syringe.upm) : NaN;
+    return { c: c, syringe: syringe, isBlend: isBlend, preset: preset, singleName: singleName, vialNum: vialNum, blendTitle: blendTitle, compNames: compNames, compMg: compMg,
+      blendValid: blendValid, totalMg: totalMg, byTotal: byTotal, idx: idx, basisLabel: basisLabel, v: v, w: w, dRaw: dRaw, doseMcg: doseMcg, r: r, tu: tu, okR: okR,
+      waterNeeded: waterNeeded, waterRounded: Math.round(waterNeeded * 100) / 100, sfx: isBlend ? ' · ' + basisLabel : '' };
+  }
+  function doseByHTML(m) {
+    const c = state.calc;
+    const opts = c.comps.map(function (x, i) { return { v: 'c' + i, l: m.compNames[i] + ' (' + fmt(m.compMg[i], 3) + ' mg in vial)' }; });
+    opts.push({ v: 'total', l: 'Total blend mass (' + fmt(m.totalMg, 3) + ' mg)' });
+    const cur = m.byTotal ? 'total' : 'c' + m.idx;
+    return '<label class="f"><span class="l">Dose by</span><select data-calc="doseBy">' + opts.map(function (o) {
+      return '<option value="' + o.v + '"' + (o.v === cur ? ' selected' : '') + '>' + esc(o.l) + '</option>';
+    }).join('') + '</select></label>';
+  }
+  function calcInputsHTML(m) {
+    const c = state.calc;
+    let h = '<div class="stack">' + seg('calc-mode', [{ v: 'single', l: 'Single peptide' }, { v: 'blend', l: 'Blend' }], c.mode);
+    if (!m.isBlend) {
+      h += '<label class="f"><span class="l">Peptide</span><select data-calc="peptide">' + C.PRESETS.map(function (p) { return p.name; }).concat([C.CUSTOM]).map(function (n) {
+        return '<option' + (n === c.peptide ? ' selected' : '') + '>' + esc(n) + '</option>';
+      }).join('') + '</select></label>';
+      if (c.peptide === C.CUSTOM) h += '<label class="f"><span class="l">Peptide name</span><input type="text" data-calc="customName" value="' + esc(c.customName) + '" placeholder="Name"></label>';
+      if (m.preset && m.preset.vials.length > 1) {
+        h += '<div><div class="small muted" style="margin-bottom:6px">Typical vial sizes (mg)</div><div class="chips">' + m.preset.vials.map(function (x) {
+          return '<button type="button" class="chip" data-action="calc-vial" data-v="' + x + '" aria-pressed="' + (x === m.vialNum) + '">' + x + '</button>';
+        }).join('') + '</div></div>';
+      }
+      h += '<label class="f"><span class="l">Vial amount (mg)</span><input type="number" inputmode="decimal" step="any" min="0" id="calc-vialMg" data-calc="vialMg" value="' + esc(c.vialMg) + '"></label>';
+    } else {
+      const custom = c.blendId === C.CUSTOM_BLEND;
+      h += '<label class="f"><span class="l">Blend vial</span><select data-calc="blendId">' + C.BLENDS.map(function (b) { return { v: b.id, l: b.label }; })
+        .concat([{ v: C.CUSTOM_BLEND, l: 'Custom blend (2 to 4 components)' }]).map(function (o) {
+          return '<option value="' + o.v + '"' + (o.v === c.blendId ? ' selected' : '') + '>' + esc(o.l) + '</option>';
+        }).join('') + '</select></label>';
+      h += '<p class="small muted">Blend amounts vary by supplier, so edit each amount to match your vial label. Presets are typical listed compositions, not recommendations.</p>';
+      c.comps.forEach(function (x, i) {
+        h += '<div class="row"><label class="f"><span class="l">Component ' + (i + 1) + ' name</span><input type="text" data-calc="comp" data-i="' + i + '" data-f="name" value="' + esc(x.name) + '"></label>' +
+          '<label class="f"><span class="l">Amount (mg)</span><input type="number" inputmode="decimal" step="any" min="0" data-calc="comp" data-i="' + i + '" data-f="mg" value="' + esc(x.mg) + '"></label>' +
+          (custom && c.comps.length > 2 ? '<button type="button" class="btn sm fit" data-action="calc-remove-comp" data-i="' + i + '">Remove</button>' : '') + '</div>';
+      });
+      if (custom && c.comps.length < 4) h += '<div><button type="button" class="btn sm" data-action="calc-add-comp">Add component</button></div>';
+      h += '<div id="calc-doseby">' + doseByHTML(m) + '</div>';
+    }
+    h += '<label class="f"><span class="l">Bacteriostatic water added (mL)</span><input type="number" inputmode="decimal" step="any" min="0" id="calc-water" data-calc="water" value="' + esc(c.water) + '"></label>';
+    h += '<div class="row"><label class="f"><span class="l" id="calc-dose-label"></span><input type="number" inputmode="decimal" step="any" min="0" data-calc="dose" value="' + esc(c.dose) + '"></label>' +
+      '<div class="fit">' + seg('calc-unit', [{ v: 'mcg', l: 'mcg' }, { v: 'mg', l: 'mg' }], c.doseUnit) + '</div></div>';
+    h += '<div><div class="small muted" style="margin-bottom:6px">Syringe</div>' + seg('calc-syringe', C.SYRINGES.map(function (s) { return { v: s.id, l: s.label }; }), c.syringeId) + '</div></div>';
+    return h;
+  }
+  function calcResultsHTML(m) {
+    const r = m.r;
+    if (!r) return '<p class="muted">' + (m.isBlend ? 'Enter a positive amount for every blend component, a water volume, and a dose to see results.' : 'Enter a positive vial amount, water volume, and dose to see results.') + '</p>';
+    const items = [];
+    if (m.isBlend) {
+      items.push(['Blend', m.blendTitle + ': ' + m.compNames.map(function (n, i) { return n + ' ' + fmt(m.compMg[i], 3) + ' mg'; }).join(' + ') + ' in ' + fmt(m.w, 3) + ' mL']);
+      items.push(['Dosing by', m.basisLabel + ' (' + fmt(m.v, 3) + ' mg in vial)']);
+    } else items.push(['Peptide', m.singleName + ', ' + fmt(m.v, 3) + ' mg vial in ' + fmt(m.w, 3) + ' mL']);
+    items.push(['Concentration (mg/mL)' + m.sfx, fmt(r.concMgMl, 3)]);
+    items.push(['Concentration (mcg/mL)' + m.sfx, fmt(r.concMcgMl, 1)]);
+    items.push(['mcg per 1 unit' + m.sfx, fmt(r.mcgPerUnit, 3)]);
+    items.push(['mcg per 10 units' + m.sfx, fmt(r.mcgPerUnit * 10, 2)]);
+    items.push(['Volume per dose (mL)', fmt(r.volMl, 4)]);
+    items.push(['Syringe units to draw', fmt(r.units, 2) + ' of ' + m.syringe.cap + ' (' + m.syringe.label + ')']);
+    items.push(['Doses per vial', Math.abs(r.doses - Math.round(r.doses)) < 1e-9 ? fmt(Math.round(r.doses), 0) : fmt(Math.floor(r.doses), 0) + ' full doses (' + fmt(r.doses, 2) + ' exact)']);
+    return props(items);
+  }
+  function calcSyringeHTML(m) {
+    const r = m.r; if (!r) return '';
+    const warns = [];
+    if (r.units > m.syringe.cap + 1e-9) warns.push('The draw is ' + fmt(r.units) + ' units, which is more than the ' + m.syringe.cap + '-unit capacity of the selected syringe. Adding more water or choosing a larger syringe brings it within range.');
+    if (r.units < 2) warns.push('A draw of ' + fmt(r.units) + ' units is under 2 units, which is hard to measure accurately. Adding more water spreads the same dose over more units.');
+    if (m.doseMcg > m.v * 1000) warns.push(m.isBlend ? 'The dose is larger than the ' + m.basisLabel + ' in the vial (' + fmt(m.v * 1000, 2) + ' mcg).' : 'The dose is larger than the entire vial.');
+    return '<div class="card"><h2>Syringe fill</h2>' + (warns.length ? callout('warn', 'Check the draw', warns.map(function (x) { return '<p>' + esc(x) + '</p>'; }).join('')) : '') + syringeSvg(r.units, m.syringe.cap) + '</div>';
+  }
+  function calcDeliveredHTML(m) {
+    if (!(m.isBlend && m.r && m.blendValid)) return '';
+    const comps = m.c.comps.map(function (x, i) { return { name: m.compNames[i] + (!m.byTotal && i === m.idx ? ' (dosed by)' : ''), mg: m.compMg[i] }; });
+    comps.push({ name: 'Total blend' + (m.byTotal ? ' (dosed by)' : ''), mg: m.totalMg });
+    const rows = C.blendDelivery(comps, m.w, m.r.volMl, m.syringe.upm).map(function (d) {
+      return [d.name, fmt(d.mg, 3), fmt(d.concMgMl, 3), fmt(d.mcgPerUnit, 3), fmt(d.deliveredMcg, 2), fmt(d.fullDoses, 0)];
+    });
+    return '<div class="card"><h2>Delivered per draw, every component</h2>' + table(['Component', 'Vial (mg)', 'Conc. (mg/mL)', 'mcg per unit', 'Delivered (mcg)', 'Doses per vial'], rows) +
+      '<p class="small muted">One draw of ' + fmt(m.r.units, 2) + ' units (' + fmt(m.r.volMl, 4) + ' mL) delivers each component in proportion to its vial amount. Doses per vial counts full doses only.</p></div>';
+  }
+  function calcWaterHTML(m) {
+    let h = '';
+    if (m.okR) {
+      h += (m.waterRounded > 0 ? '<div style="margin:10px 0"><button type="button" class="btn primary" data-action="calc-use-water" data-v="' + m.waterRounded + '">Use ' + fmt(m.waterRounded, 2) + ' mL above</button></div>' : '') + props([
+        ['Water to add (mL)', fmt(m.waterNeeded, 4)],
+        ['Rounded to 0.01 mL', fmt(m.waterRounded, 2)],
+        ['Resulting concentration (mg/mL)' + m.sfx, fmt(m.v / m.waterNeeded, 3)],
+        ['Doses per vial', fmt((m.v * 1000) / m.doseMcg, 2)],
+        ['Fits selected syringe', m.tu <= m.syringe.cap ? 'Yes (' + fmt(m.tu, 2) + ' of ' + m.syringe.cap + ' units)' : 'No (' + fmt(m.tu, 2) + ' exceeds ' + m.syringe.cap + ' units)'],
+      ]);
+    } else h += '<p class="muted">' + (m.isBlend ? 'Enter valid blend amounts, a dose, and a target number of units to calculate.' : 'Enter a vial amount, a dose, and a target number of units to calculate.') + '</p>';
+    return h;
+  }
+  function calcTableHTML(m) {
+    if (!(m.v > 0 && m.w > 0)) return '';
+    const vialMcg = m.v * 1000;
+    let doses = C.LADDER.filter(function (d) { return d >= vialMcg / 100 && d <= vialMcg / 2; }).slice(0, 8);
+    if (m.doseMcg > 0 && !doses.some(function (d) { return Math.abs(d - m.doseMcg) < 1e-9; })) doses = doses.concat([m.doseMcg]).sort(function (a, b) { return a - b; });
+    if (!doses.length) return '';
+    let mineIdx = -1;
+    const rows = doses.map(function (d, i) {
+      const k = C.compute(m.v, m.w, d, m.syringe.upm);
+      const flag = k.units > m.syringe.cap + 1e-9 ? 'Over capacity' : k.units < 2 ? 'Under 2 units' : 'OK';
+      const mine = m.doseMcg > 0 && Math.abs(d - m.doseMcg) < 1e-9; if (mine) mineIdx = i;
+      return [fmt(d, 2) + (mine ? ' (your dose)' : ''), fmt(d / 1000, 3), fmt(k.volMl, 3), fmt(k.units, 2), fmt(Math.floor(k.doses + 1e-9), 0), flag === 'OK' ? 'OK' : { text: flag }];
+    });
+    return '<div class="card"><h2>Quick reference: units to draw</h2>' + table([m.isBlend ? m.basisLabel + ' dose (mcg)' : 'Dose (mcg)', 'Dose (mg)', 'Volume (mL)', 'Units', 'Doses per vial', 'Check'], rows, mineIdx) +
+      '<p class="small muted">' + (m.isBlend ? 'Based on ' + fmt(m.v, 3) + ' mg of ' + m.basisLabel + ' in ' + fmt(m.w, 3) + ' mL with the ' + m.syringe.label + ' syringe. The other components scale in proportion. ' : 'Based on a ' + fmt(m.v, 3) + ' mg vial in ' + fmt(m.w, 3) + ' mL with the ' + m.syringe.label + ' syringe. ') + 'Doses per vial counts full doses only.</p></div>';
+  }
+  function fracHTML(n, d) { return '<span class="frac"><span>' + n + '</span><span>' + d + '</span></span>'; }
+  function calcFormulasHTML() {
+    return '<div class="card"><h2>Formulas</h2>' +
+      '<div class="eq">concentration (mg/mL) = ' + fracHTML('vial amount (mg)', 'water added (mL)') + '</div>' +
+      '<div class="eq">volume per dose (mL) = ' + fracHTML('dose (mcg)', 'concentration (mcg/mL)') + '</div>' +
+      '<div class="eq">units to draw = volume (mL) × units per mL</div>' +
+      '<div class="eq">doses per vial = ' + fracHTML('vial amount (mg) × 1000', 'dose (mcg)') + '</div>' +
+      '<p class="small">Units per mL is 100 for U-100 syringes and 40 for U-40 syringes. 1 mg = 1000 mcg. Example: 5 mg in 2 mL is 2.5 mg/mL (2500 mcg/mL); a 250 mcg dose is 250 ÷ 2500 = 0.1 mL, which is 10 units on a U-100 syringe, and the vial holds 5000 ÷ 250 = 20 doses.</p>' +
+      '<div class="eq">component concentration (mg/mL) = ' + fracHTML('component amount (mg)', 'water added (mL)') + '</div>' +
+      '<div class="eq">component delivered (mcg) = component concentration (mcg/mL) × volume drawn (mL)</div>' +
+      '<p class="small">For a blend, each component\'s concentration is its own mg ÷ the same water volume, so a draw sized for one component delivers every component in proportion to its vial amount. Example: 10 mg BPC-157 + 10 mg TB-500 in 2 mL is 5 mg/mL of each; 500 mcg of BPC-157 is 500 ÷ 5000 = 0.1 mL (10 units on U-100), which also delivers 500 mcg of TB-500, for 20 doses per vial.</p></div>';
+  }
+  function renderCalc() {
+    const m = calcModel();
+    $('#view').innerHTML = '<div class="grid2"><div class="card"><h2>Inputs</h2><div id="calc-inputs"></div></div><div class="card"><h2>Results</h2><div id="calc-results"></div></div></div>' +
+      '<div id="calc-syr"></div><div id="calc-delivered"></div>' +
+      '<div class="card"><h2>How much water for a round number?</h2><p class="small muted" id="calc-water-desc"></p>' +
+      '<label class="f" style="max-width:260px"><span class="l">Target units per dose</span><input type="number" inputmode="decimal" step="any" min="0" data-calc="targetUnits" value="' + esc(state.calc.targetUnits) + '"></label>' +
+      '<div id="calc-water-out"></div></div><div id="calc-table"></div>' + calcFormulasHTML() +
+      callout('', 'Math tool only', '<p>' + esc(DISCLAIMER) + '</p>');
+    $('#calc-inputs').innerHTML = calcInputsHTML(m);
+    refreshCalcOutputs();
+  }
+  function refreshCalcOutputs() {
+    const m = calcModel();
+    $('#calc-results').innerHTML = calcResultsHTML(m);
+    $('#calc-syr').innerHTML = calcSyringeHTML(m);
+    $('#calc-delivered').innerHTML = calcDeliveredHTML(m);
+    $('#calc-water-out').innerHTML = calcWaterHTML(m);
+    $('#calc-table').innerHTML = calcTableHTML(m);
+    $('#calc-dose-label').textContent = m.isBlend ? 'Desired dose of ' + m.basisLabel + ' (' + m.c.doseUnit + ')' : 'Desired dose (' + m.c.doseUnit + ')';
+    $('#calc-water-desc').textContent = m.isBlend ? 'Uses the dose-by amount (' + m.basisLabel + '), dose, and syringe chosen above. Enter the number of units you want each dose to measure.' : 'Uses the vial amount, dose, and syringe chosen above. Enter the number of units you want each dose to measure.';
+  }
+  function calcRebuildInputs() { $('#calc-inputs').innerHTML = calcInputsHTML(calcModel()); refreshCalcOutputs(); }
+  function toComps(b) { return b.comps.map(function (c) { return { name: c.name, mg: String(c.mg) }; }); }
+  const calcActions = {
+    'calc-mode': function (d) { state.calc.mode = d.v; saveSoon(); calcRebuildInputs(); },
+    'calc-vial': function (d) { state.calc.vialMg = d.v; saveSoon(); calcRebuildInputs(); },
+    'calc-unit': function (d) {
+      const c = state.calc; if (d.v === c.doseUnit) return;
+      const raw = num(c.dose);
+      if (Number.isFinite(raw)) c.dose = String(Math.round((d.v === 'mg' ? raw / 1000 : raw * 1000) * 1e6) / 1e6);
+      c.doseUnit = d.v; saveSoon(); calcRebuildInputs();
+    },
+    'calc-syringe': function (d) { state.calc.syringeId = d.v; saveSoon(); calcRebuildInputs(); },
+    'calc-add-comp': function () { const c = state.calc; if (c.comps.length < 4) { c.comps.push({ name: 'Peptide ' + String.fromCharCode(65 + c.comps.length), mg: '5' }); saveSoon(); calcRebuildInputs(); } },
+    'calc-remove-comp': function (d) { const c = state.calc; if (c.comps.length > 2) { c.comps.splice(+d.i, 1); c.doseBy = 'c0'; saveSoon(); calcRebuildInputs(); } },
+    'calc-use-water': function (d) { state.calc.water = String(d.v); saveSoon(); const el = $('#calc-water'); if (el) el.value = state.calc.water; refreshCalcOutputs(); },
+  };
+  function onCalcInput(e) {
+    const t = e.target, f = t.dataset.calc;
+    if (!f || t.tagName === 'SELECT') return;
+    if (f === 'comp') { state.calc.comps[+t.dataset.i][t.dataset.f] = t.value; const box = $('#calc-doseby'); if (box) box.innerHTML = doseByHTML(calcModel()); }
+    else state.calc[f] = t.value;
+    saveSoon(); refreshCalcOutputs();
+  }
+  function onCalcChange(e) {
+    const t = e.target, f = t.dataset.calc;
+    if (!f || t.tagName !== 'SELECT') return;
+    const c = state.calc;
+    if (f === 'peptide') {
+      c.peptide = t.value;
+      const p = C.PRESETS.find(function (x) { return x.name === t.value; });
+      if (p) c.vialMg = String(p.vials[0]);
+      calcRebuildInputs();
+    } else if (f === 'blendId') {
+      c.blendId = t.value;
+      const b = C.BLENDS.find(function (x) { return x.id === t.value; });
+      if (b) { c.comps = toComps(b); c.doseBy = 'c0'; }
+      calcRebuildInputs();
+    } else if (f === 'doseBy') { c.doseBy = t.value; refreshCalcOutputs(); }
+    saveSoon();
+  }
+
+  // ---------- Shared inventory/planner view helpers ----------
+  function lowBannerHTML() {
+    const items = C.lowStock(state, today());
+    if (!items.length) return '';
+    const word = { out: 'Out / expired', low: 'At reorder level', soon: 'Running low soon' };
+    const bad = items.some(function (i) { return i.level !== 'soon'; });
+    return callout(bad ? 'bad' : 'warn', 'Reorder list (' + items.length + ')', '<ul>' + items.map(function (i) {
+      return '<li><b>' + esc(i.label) + '</b>: ' + esc(i.reason.replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return fmtDate(d, { year: true }); })) + ' <span class="pill ' + (i.level === 'soon' ? 'warn' : 'bad') + '">' + word[i.level] + '</span></li>';
+    }).join('') + '</ul>');
+  }
+  function remainingText(v) {
+    return v.comps.map(function (c, i) { return (v.comps.length > 1 ? c.name + ' ' : '') + fmt(Math.max(0, v.remaining[i]), 3) + ' mg'; }).join(' · ');
+  }
+  function vialMlLeft(v) { return v.comps.length && v.comps[0].mg > 0 ? v.bacMl * Math.max(0, v.remaining[0]) / v.comps[0].mg : NaN; }
+  function vialProjHTML(v) {
+    const pr = C.projectVial(state, v.id, today());
+    if (!pr || !pr.hasSchedule) return '<span class="muted">No upcoming scheduled doses use this vial.</span>';
+    if (pr.coversSchedule) return 'Covers all ' + pr.dosesLeft + ' remaining scheduled doses (last on ' + fmtDate(pr.lastFullDoseOn) + ').';
+    return 'Projected to run out on <b>' + fmtDate(pr.runsOutOn, { year: true }) + '</b> (' + relDays(pr.runsOutOn) + '), after ' + pr.dosesLeft + ' more scheduled dose' + (pr.dosesLeft === 1 ? '' : 's') + '.';
+  }
+  function freqLabel(f) {
+    return f.type === 'weekdays' ? [1, 2, 3, 4, 5, 6, 0].filter(function (d) { return f.days.indexOf(d) >= 0; }).map(function (d) { return DAY_NAMES[d]; }).join(', ') : f.type === 'everyN' ? 'Every ' + f.n + ' days' : 'Daily';
+  }
+  function timesLabel(times) { return times.map(function (x) { return x.label + ' ' + fmtTime(x.time); }).join(', '); }
+  function expiryPill(v) {
+    const s = C.vialExpiryState(v, today());
+    if (!s) return '';
+    return s === 'expired' ? '<span class="pill bad">Past expiry you set</span>' : s === 'soon' ? '<span class="pill warn">Expiry ' + relDays(v.expiry) + '</span>' : '<span class="pill">Expires ' + fmtDate(v.expiry) + '</span>';
+  }
+
+  // ---------- Today / Log ----------
+  function doseCardHTML(x) {
+    const p = x.protocol, syr = syringeById(p.syringeId), v = x.mix.vial;
+    const isPast = x.date < today();
+    const cls = x.status === 'taken' ? 'done' : x.status === 'skipped' ? 'skipped' : isPast ? 'missed' : 'pending';
+    const pill = x.status === 'taken' ? '<span class="pill ok">Taken</span>' : x.status === 'skipped' ? '<span class="pill">Skipped</span>' : isPast ? '<span class="pill warn">Not logged</span>' : '<span class="pill info">Due</span>';
+    const units = x.log && x.log.units > 0 ? x.log.units : x.units;
+    const comps = x.mix.comps;
+    const basisName = C.basisIndex(comps, p.doseBy) < 0 ? 'total blend' : comps[C.basisIndex(comps, p.doseBy)].name;
+    let h = '<div class="dose ' + cls + '"><div class="dose-top"><div><span class="dose-time">' + esc(fmtTime(x.time)) + '</span> <span class="muted">' + esc(x.label) + '</span> · <span class="dose-name">' + esc(p.name) + '</span></div>' + pill + '</div>';
+    if (x.doseMcg > 0) {
+      h += '<div style="margin:6px 0"><span class="dose-big">' + (Number.isFinite(units) ? fmt(units, 2) + ' units' : '— units') + '</span> <span class="muted">on ' + esc(syr.label) + '</span></div>';
+      h += '<div class="dose-meta"><span><b>' + fmt(x.doseMcg, 3) + ' mcg</b> (' + fmt(x.doseMcg / 1000, 4) + ' mg)' + (comps.length > 1 ? ' of ' + esc(basisName) : '') + '</span>' +
+        (x.log && x.log.doseMcg && x.scheduledMcg && Math.abs(x.log.doseMcg - x.scheduledMcg) > 1e-9 ? '<span>scheduled ' + fmt(x.scheduledMcg, 3) + ' mcg</span>' : '') + '</div>';
+      if (Number.isFinite(units) && C.mixValid(x.mix)) {
+        h += syringeSvg(units, syr.cap, true);
+        if (comps.length > 1) {
+          h += '<div class="dose-meta">' + C.blendDelivery(comps, x.mix.bacMl, units / syr.upm, syr.upm).map(function (d) { return '<span>' + esc(d.name) + ' <b>' + fmt(d.deliveredMcg, 2) + ' mcg</b></span>'; }).join('') + '</div>';
+        }
+      } else h += callout('warn', '', '<p>Units can’t be worked out: ' + (v || x.mix.stock ? 'check the BAC water amount on the source.' : 'no vial or mix details are linked to this protocol.') + '</p>');
+    } else h += callout('warn', '', '<p>No dose is set for week ' + C.weekOf(p, x.date) + ' of this protocol, so no units can be shown. Edit the protocol’s titration steps.</p>');
+    const need = x.doseMcg > 0 && v && v.status !== 'finished' ? C.deductions({ comps: v.comps }, p.doseBy, x.doseMcg) : null;
+    const over = need && x.status === 'pending' && need.some(function (d, i) { return v.remaining[i] - d < -1e-9; });
+    h += '<div class="dose-meta">' + (v ? '<span>Vial: ' + esc(v.name) + ' · <b>' + esc(remainingText(v)) + '</b> left</span>' + expiryPill(v) : '<span>No reconstituted vial linked (nothing will be deducted)</span>') +
+      (p.useNeedle !== false ? '<span>' + syr.label + ' stock: <b>' + state.needles.filter(function (n) { return n.type === p.syringeId; }).reduce(function (a, n) { return a + n.count; }, 0) + '</b></span>' : '') + '</div>';
+    if (over) h += callout('warn', '', '<p>This vial has less left than this dose needs. Check the remaining amount in Inventory.</p>');
+    if (x.log && x.log.note) h += '<p class="small">Note: ' + esc(x.log.note) + '</p>';
+    const d = 'data-key="' + esc(x.key) + '"';
+    h += '<div class="dose-actions">' + (x.status === 'pending'
+      ? '<button class="btn primary" data-action="log-taken" ' + d + '>✓ Taken</button><button class="btn" data-action="log-skip" ' + d + '>Skip</button><button class="btn" data-action="log-edit" ' + d + '>Edit…</button>'
+      : '<button class="btn" data-action="log-edit" ' + d + '>Edit…</button><button class="btn" data-action="log-undo" ' + d + '>Undo</button>') + '</div></div>';
+    return h;
+  }
+  function renderToday() {
+    const date = ui.date, isToday = date === today();
+    const doses = C.dosesOn(state, date);
+    const taken = doses.filter(function (x) { return x.status === 'taken'; }).length;
+    const skipped = doses.filter(function (x) { return x.status === 'skipped'; }).length;
+    let h = '<div class="datebar"><button class="btn" data-action="date-shift" data-v="-1" aria-label="Previous day">◀</button><div class="title">' + esc(fmtDate(date, { year: true })) + (isToday ? ' <span class="pill info">Today</span>' : '') + '</div>' +
+      '<input type="date" value="' + date + '" data-date-input style="width:auto" aria-label="Choose date"><button class="btn" data-action="date-shift" data-v="1" aria-label="Next day">▶</button>' + (isToday ? '' : '<button class="btn" data-action="date-today">Today</button>') + '</div>';
+    h += lowBannerHTML();
+    if (!state.protocols.length) {
+      h += '<div class="card empty"><p><b>No protocols yet.</b></p><p>Create one in the Planner to see scheduled doses and syringe units here.</p><p><button class="btn primary" data-action="goto" data-v="planner">Open Planner</button> <button class="btn" data-action="load-sample">Load demo data</button></p></div>';
+    } else if (!doses.length) {
+      h += '<div class="card empty"><p>No doses scheduled for this day.</p></div>';
+    } else {
+      h += '<p class="muted small">' + doses.length + ' scheduled · ' + taken + ' taken · ' + skipped + ' skipped · ' + (doses.length - taken - skipped) + ' open</p>' + doses.map(doseCardHTML).join('');
+    }
+    h += '<p class="footer">' + esc(DISCLAIMER) + '</p>';
+    $('#view').innerHTML = h;
+  }
+  function findDose(key) {
+    const parts = key.split('|');
+    return C.dosesOn(state, parts[1]).find(function (x) { return x.key === key; });
+  }
+  function afterLog(msg) { save(); render(); if (msg) toast(msg); }
+  const todayActions = {
+    'date-shift': function (d) { ui.date = C.addDays(ui.date, +d.v); render(); },
+    'date-today': function () { ui.date = today(); render(); },
+    'log-taken': function (d) {
+      const x = findDose(d.key); if (!x) return;
+      if (!(x.doseMcg > 0)) { toast('Set a dose for this week in the protocol first.'); return; }
+      const before = state.needles.filter(function (n) { return n.type === x.protocol.syringeId; }).reduce(function (a, n) { return a + n.count; }, 0);
+      const log = C.setLog(state, { protocolId: x.protocol.id, date: x.date, slot: x.slot, status: 'taken' });
+      const notes = [];
+      if (!log.vialId) notes.push('no vial deducted'); 
+      if (x.protocol.useNeedle !== false && !log.needleId) notes.push(before < 1 ? 'out of ' + syringeById(x.protocol.syringeId).label + ' stock' : 'no syringe deducted');
+      afterLog('Logged as taken' + (notes.length ? ' (' + notes.join(', ') + ')' : ''));
+    },
+    'log-skip': function (d) { const x = findDose(d.key); if (!x) return; C.setLog(state, { protocolId: x.protocol.id, date: x.date, slot: x.slot, status: 'skipped' }); afterLog('Logged as skipped'); },
+    'log-undo': function (d) { C.clearLog(state, d.key); afterLog('Log removed and stock restored'); },
+    'log-edit': function (d) { openLogEditor(d.key); },
+  };
+  function openLogEditor(key) {
+    const x = findDose(key); if (!x) return;
+    const p = x.protocol;
+    const vialOpts = [{ v: '', l: 'No vial (don’t deduct)' }].concat(state.vials.filter(function (v) { return v.status === 'active' || (x.log && x.log.vialId === v.id); }).map(function (v) { return { v: v.id, l: v.name + ' · ' + remainingText(v) + ' left' }; }));
+    const needleOpts = [{ v: '', l: 'Automatic (matching syringe type)' }, { v: 'none', l: 'Don’t deduct a syringe' }].concat(state.needles.map(function (n) { return { v: n.id, l: C.needleLabel(n) + ' (' + n.count + ' in stock)' }; }));
+    const curVial = x.log && x.log.status === 'taken' ? (x.log.vialId || '') : (x.mix.vial ? x.mix.vial.id : '');
+    const fields = [
+      { type: 'note', html: '<b>' + esc(p.name) + '</b> · ' + esc(fmtDate(x.date, { year: true })) + ' · ' + esc(x.label) },
+      { type: 'select', name: 'status', label: 'Status', value: x.log ? x.log.status : 'taken', options: [{ v: 'taken', l: 'Taken' }, { v: 'skipped', l: 'Skipped' }] },
+      { row: [{ type: 'number', name: 'dose', label: 'Dose actually taken (mcg' + (x.mix.comps.length > 1 ? ' of ' + x.mix.comps[Math.max(0, C.basisIndex(x.mix.comps, p.doseBy))].name : '') + ')', value: x.doseMcg > 0 ? x.doseMcg : '' }, { type: 'time', name: 'time', label: 'Time', value: x.time }] },
+      { type: 'select', name: 'vial', label: 'Deduct from vial', value: curVial, options: vialOpts },
+      { type: 'select', name: 'needle', label: 'Syringe used', value: x.log && !x.log.needleId && x.log.status === 'taken' ? 'none' : (x.log && x.log.needleId ? x.log.needleId : ''), options: needleOpts },
+      { type: 'textarea', name: 'note', label: 'Note', value: x.log ? x.log.note : '', placeholder: 'Optional' },
+    ];
+    openForm({
+      title: x.log ? 'Edit logged dose' : 'Log dose', fields: fields, submitLabel: 'Save',
+      extraFooter: x.log ? '<button type="button" class="btn danger" data-action="dlg-log-undo" style="margin-right:auto">Remove log</button>' : '',
+      onSubmit: function (v) {
+        if (v.status === 'taken' && !(v.dose > 0)) return 'Enter the dose in mcg (above 0).';
+        C.setLog(state, { protocolId: p.id, date: x.date, slot: x.slot, status: v.status, doseMcg: v.dose > 0 ? v.dose : undefined, time: v.time || x.time, note: v.note,
+          vialId: v.vial || null, useNeedle: v.needle !== 'none', needleId: v.needle && v.needle !== 'none' ? v.needle : undefined });
+        afterLog('Saved');
+      },
+    });
+    dlgCtl.click = function (a) { if (a === 'dlg-log-undo') { C.clearLog(state, key); closeDlg(); afterLog('Log removed and stock restored'); } };
+  }
+
+  // ---------- Planner ----------
+  function protocolCardHTML(p) {
+    const t = today();
+    const st = C.protocolStatus(p, t);
+    const mix = C.resolveMix(state, p);
+    const syr = syringeById(p.syringeId);
+    const pillCls = { active: 'ok', upcoming: 'info', ended: '', paused: 'warn' }[st];
+    const stepRows = p.steps.slice().sort(function (a, b) { return a.from - b.from; }).map(function (s) {
+      const cur = st === 'active' && C.weekOf(p, t) >= s.from && C.weekOf(p, t) <= s.to;
+      const f = C.freqFor(p, s), times = C.timesFor(p, s), own = !!(s.freq || s.times);
+      const dpw = C.dosesPerWeek(f, times.length);
+      const doseOf = function (i) { return s.slotDoses && s.slotDoses[i] > 0 ? s.slotDoses[i] : s.doseMcg; };
+      const unitTxt = function (d) { const u = C.unitsFor(mix, p.doseBy, d, p.syringeId); return Number.isFinite(u) ? ' (' + fmt(u, 2) + ' units)' : ''; };
+      const doses = s.slotDoses || times.length === 1
+        ? times.map(function (tm, i) { return (times.length > 1 ? esc(tm.label) + ' ' : '') + '<b>' + fmt(doseOf(i), 3) + ' mcg</b>' + unitTxt(doseOf(i)); }).join(' · ')
+        : '<b>' + fmt(s.doseMcg, 3) + ' mcg</b> each' + unitTxt(s.doseMcg);
+      return '<div class="steprow' + (cur ? ' cur' : '') + '"><div class="sr-head"><b>' + (s.from === s.to ? 'Week ' + s.from : 'Weeks ' + s.from + '–' + s.to) + '</b>' + (cur ? ' <span class="pill ok">now</span>' : '') + ' <span class="pill">≈ ' + dpw + ' dose' + (dpw === 1 ? '' : 's') + '/wk</span>' + (own ? ' <span class="pill info">own schedule</span>' : '') + '</div>' +
+        '<div class="small">' + esc(freqLabel(f)) + ' · ' + esc(timesLabel(times)) + '</div><div class="small">' + doses + '</div></div>';
+    }).join('');
+    const w = C.weekOf(p, t);
+    let h = '<div class="item"><div class="item-head"><div><div class="item-title">' + esc(p.name) + '</div><div class="small muted">' + esc(C.mixTitle(mix.comps) || 'No mix details') + (mix.bacMl > 0 ? ' · ' + fmt(mix.bacMl, 3) + ' mL BAC' : '') + '</div></div><span class="pill ' + pillCls + '">' + st[0].toUpperCase() + st.slice(1) + '</span></div>';
+    h += '<div class="kv" style="margin:8px 0"><span>Default: ' + esc(freqLabel(p.freq)) + ' · ' + esc(timesLabel(p.times)) + '</span>' +
+      '<span>' + fmtDate(p.start) + ' → ' + fmtDate(C.cycleEnd(p)) + ' (' + p.weeks + ' wk)</span>' + (st === 'active' ? '<span><b>Week ' + w + ' of ' + p.weeks + '</b></span>' : '') + '<span>' + esc(syr.label) + '</span></div>';
+    h += '<div class="steplist">' + stepRows + '</div>';
+    if (mix.vial) h += '<p class="small"><b>' + esc(mix.vial.name) + '</b> · ' + esc(remainingText(mix.vial)) + ' left' + (Number.isFinite(vialMlLeft(mix.vial)) ? ' (≈' + fmt(vialMlLeft(mix.vial), 2) + ' mL)' : '') + '<br>' + vialProjHTML(mix.vial) + '</p>';
+    else if (mix.stock) h += '<p class="small muted">Linked to unopened stock “' + esc(mix.stock.name) + '”. Reconstitute a vial in Inventory to link it automatically.</p>';
+    else h += '<p class="small muted">Ad hoc numbers; no inventory deducted.</p>';
+    if (p.note) h += '<p class="small">' + esc(p.note) + '</p>';
+    h += '<div class="item-actions"><button class="btn sm" data-action="proto-edit" data-id="' + p.id + '">Edit</button><button class="btn sm" data-action="proto-dup" data-id="' + p.id + '">Duplicate</button><button class="btn sm" data-action="proto-toggle" data-id="' + p.id + '">' + (p.active === false ? 'Resume' : 'Pause') + '</button><button class="btn sm danger" data-action="proto-del" data-id="' + p.id + '">Delete</button></div></div>';
+    return h;
+  }
+  function calendarHTML() {
+    const start = ui.calStart, t = today();
+    let h = '<div class="card"><div class="card-head"><h2>Calendar</h2><div class="row" style="flex:0 0 auto"><button class="btn sm fit" data-action="cal-shift" data-v="-28">◀ 4 wks</button><button class="btn sm fit" data-action="cal-today">This week</button><button class="btn sm fit" data-action="cal-shift" data-v="28">4 wks ▶</button></div></div>';
+    h += '<p class="small muted">' + fmtDate(start) + ' – ' + fmtDate(C.addDays(start, 27), { year: true }) + '. Tap a day to open it in Today. Numbers show doses taken / scheduled.</p><div class="cal">';
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(function (n) { h += '<div class="dh">' + n + '</div>'; });
+    for (let i = 0; i < 28; i++) {
+      const d = C.addDays(start, i);
+      const ds = C.dosesOn(state, d);
+      const taken = ds.filter(function (x) { return x.status === 'taken'; }).length;
+      const dd = C.parseYmd(d);
+      h += '<button data-action="cal-day" data-v="' + d + '" class="' + (d === t ? 'today ' : '') + (ds.length ? '' : 'off ') + (ds.length && taken === ds.length ? 'alldone' : '') + '" aria-label="' + esc(fmtDate(d) + ': ' + taken + ' of ' + ds.length + ' doses taken') + '"><span class="n">' + dd.getDate() + (dd.getDate() === 1 || i === 0 ? ' <span class="muted" style="font-weight:400">' + MONTHS[dd.getMonth()] + '</span>' : '') + '</span>' + (ds.length ? '<span class="c">' + taken + '/' + ds.length + '</span>' : '') + '</button>';
+    }
+    return h + '</div></div>';
+  }
+  function renderPlanner() {
+    let h = '<div class="sec-title" style="margin-top:0"><h2>Protocols</h2><button class="btn primary" data-action="proto-new">+ New protocol</button></div>';
+    if (!state.protocols.length) h += '<div class="card empty"><p><b>No protocols yet.</b></p><p>A protocol schedules doses over a cycle: titration steps by week, frequency, and up to several doses per day. Logged doses deduct from the linked vial and your syringe stock.</p><p><button class="btn primary" data-action="proto-new">+ New protocol</button> <button class="btn" data-action="load-sample">Load demo data</button></p></div>';
+    else h += state.protocols.map(protocolCardHTML).join('');
+    h += calendarHTML() + '<p class="footer">' + esc(DISCLAIMER) + '</p>';
+    $('#view').innerHTML = h;
+  }
+
+  // ----- Protocol editor (draft kept in memory; dialog re-rendered on structural changes) -----
+  let draft = null;
+  const MAX_STEPS = 12;
+  const clone = function (o) { return JSON.parse(JSON.stringify(o)); };
+  const mult = function (d) { return d.doseUnit === 'mg' ? 1000 : 1; };
+  const toUnit = function (mcg, d) { return String(Math.round(mcg / mult(d) * 1e6) / 1e6); };
+  function newStep(d, from, to) {
+    return { from: String(from), to: String(to), dose: '', perSlot: false, slotDoses: [], custom: false, freq: clone(d.freq), times: clone(d.times) };
+  }
+  function newDraft() {
+    const av = state.vials.filter(function (v) { return v.status === 'active'; });
+    const d = { id: null, name: '', active: true, sourceKind: av.length ? 'vial' : state.stock.length ? 'stock' : 'adhoc', vialId: av.length ? av[0].id : null, stockId: state.stock.length ? state.stock[0].id : null,
+      comps: [{ name: '', mg: '' }], bacMl: '', doseBy: 'c0', syringeId: C.DEFAULT_SYRINGE_ID, useNeedle: true, needleId: null, start: today(), weeks: '4', doseUnit: 'mcg',
+      steps: [], freq: { type: 'daily', days: [1, 2, 3, 4, 5], n: '2' }, times: [{ label: 'AM', time: '08:00' }], note: '' };
+    d.steps.push(newStep(d, 1, 4));
+    return d;
+  }
+  function draftFromProtocol(p) {
+    const kind = p.vialId && state.vials.some(function (v) { return v.id === p.vialId; }) ? 'vial' : p.stockId && state.stock.some(function (s) { return s.id === p.stockId; }) ? 'stock' : 'adhoc';
+    const d = { id: p.id, name: p.name, active: p.active !== false, sourceKind: kind, vialId: p.vialId, stockId: p.stockId, comps: p.comps.length ? p.comps.map(function (c) { return { name: c.name, mg: String(c.mg) }; }) : [{ name: '', mg: '' }],
+      bacMl: p.bacMl ? String(p.bacMl) : '', doseBy: p.doseBy, syringeId: p.syringeId, useNeedle: p.useNeedle !== false, needleId: p.needleId, start: p.start, weeks: String(p.weeks), doseUnit: p.doseUnit,
+      steps: [], freq: { type: p.freq.type, days: p.freq.days.slice(), n: String(p.freq.n) }, times: p.times.map(function (t) { return { label: t.label, time: t.time }; }), note: p.note || '' };
+    d.steps = p.steps.map(function (s) {
+      const st = newStep(d, s.from, s.to);
+      st.dose = toUnit(s.doseMcg, d);
+      if (s.freq || s.times) { st.custom = true; if (s.freq) st.freq = { type: s.freq.type, days: s.freq.days.slice(), n: String(s.freq.n) }; if (s.times) st.times = s.times.map(function (t) { return { label: t.label, time: t.time }; }); }
+      if (s.slotDoses) { st.perSlot = true; st.slotDoses = s.slotDoses.map(function (x) { return toUnit(x, d); }); }
+      return st;
+    });
+    return d;
+  }
+  /** Keep every per-time dose list the same length as the step's effective dose times. */
+  function normalizeSlots(d) {
+    d.steps.forEach(function (s) {
+      if (!s.perSlot) return;
+      const n = (s.custom ? s.times : d.times).length;
+      while (s.slotDoses.length < n) s.slotDoses.push(s.dose || '');
+      s.slotDoses.length = n;
+    });
+  }
+  function draftComps(d) {
+    if (d.sourceKind === 'vial') { const v = state.vials.find(function (x) { return x.id === d.vialId; }); return v ? v.comps : []; }
+    if (d.sourceKind === 'stock') { const s = state.stock.find(function (x) { return x.id === d.stockId; }); return s ? s.comps : []; }
+    return d.comps.map(function (c) { return { name: c.name.trim() || 'Component', mg: num(c.mg) || 0 }; });
+  }
+  function cleanFreq(f) { return { type: f.type, days: f.days.slice(), n: Math.max(1, parseInt(f.n, 10) || 2) }; }
+  function cleanTimes(times) { return times.map(function (t, i) { return { label: t.label.trim() || (times.length === 1 ? 'Dose' : 'Dose ' + (i + 1)), time: /^\d{2}:\d{2}$/.test(t.time) ? t.time : '' }; }); }
+  function checkSchedule(f, rawN, times, who, errors) {
+    if (f.type === 'weekdays' && !f.days.length) errors.push(who + 'choose at least one weekday.');
+    if (f.type === 'everyN' && !(parseInt(rawN, 10) >= 2)) errors.push(who + '“every N days” needs N of 2 or more.');
+    if (!times.length) errors.push(who + 'add at least one dose time.');
+    if (times.some(function (t) { return !t.time; })) errors.push(who + 'every dose needs a time.');
+  }
+  /** Turn the draft into a protocol; returns {p, errors, warnings}. */
+  function buildProtocol(d) {
+    normalizeSlots(d);
+    const errors = [];
+    const m = mult(d);
+    const weeks = parseInt(d.weeks, 10);
+    if (!(weeks >= 1 && weeks <= 104)) errors.push('Cycle length must be 1 to 104 weeks.');
+    if (!C.isYmd(d.start)) errors.push('Choose a start date.');
+    const p = { id: d.id || C.uid(), name: d.name.trim(), active: d.active, vialId: null, stockId: null, comps: [], bacMl: 0, doseBy: d.doseBy, syringeId: d.syringeId, useNeedle: d.useNeedle, needleId: d.needleId || null,
+      start: d.start, weeks: weeks >= 1 ? weeks : 1, doseUnit: d.doseUnit, steps: [], freq: cleanFreq(d.freq), times: cleanTimes(d.times), note: d.note.trim() };
+    if (d.sourceKind === 'vial') { if (!state.vials.some(function (v) { return v.id === d.vialId; })) errors.push('Choose a reconstituted vial, or switch the source.'); else p.vialId = d.vialId; }
+    else {
+      const bac = num(d.bacMl);
+      if (!(bac > 0)) errors.push('Enter the BAC water volume (mL) used to calculate units.'); else p.bacMl = bac;
+      if (d.sourceKind === 'stock') { if (!state.stock.some(function (s) { return s.id === d.stockId; })) errors.push('Choose an unopened stock item, or switch the source.'); else p.stockId = d.stockId; }
+      else {
+        const comps = d.comps.map(function (c) { return { name: c.name.trim(), mg: num(c.mg) }; });
+        if (!comps.length || comps.some(function (c) { return !c.name || !(c.mg > 0); })) errors.push('Each component needs a name and an amount above 0 mg.');
+        else p.comps = comps;
+      }
+    }
+    const mixComps = draftComps(d);
+    if (mixComps.length < 2) p.doseBy = 'c0';
+    else if (p.doseBy !== 'total' && !(/^c\d$/.test(p.doseBy) && +p.doseBy.slice(1) < mixComps.length)) p.doseBy = 'c0';
+    checkSchedule(p.freq, d.freq.n, p.times, 'Default schedule: ', errors);
+    if (!d.steps.length) errors.push('Add at least one titration step.');
+    d.steps.forEach(function (s, i) {
+      const eff = s.custom ? s.times : d.times;
+      const slot = s.perSlot ? eff.map(function (x, j) { return (num(s.slotDoses[j]) || 0) * m; }) : null;
+      const step = { from: parseInt(s.from, 10) || 0, to: parseInt(s.to, 10) || 0, doseMcg: slot ? slot[0] : (num(s.dose) || 0) * m, freq: null, times: null, slotDoses: slot };
+      if (s.custom) {
+        step.freq = cleanFreq(s.freq); step.times = cleanTimes(s.times);
+        checkSchedule(step.freq, s.freq.n, step.times, 'Step ' + (i + 1) + ': ', errors);
+      }
+      p.steps.push(step);
+    });
+    const sp = p.steps.length ? C.stepProblems(p) : [];
+    const warnings = sp.filter(function (x) { return x.indexOf('No dose set') === 0; });
+    sp.forEach(function (x) { if (x.indexOf('No dose set') !== 0) errors.push(x); });
+    if (!p.name) p.name = C.mixTitle(mixComps) || 'Protocol';
+    return { p: p, errors: errors, warnings: warnings };
+  }
+  function protoWarnHTML(d) {
+    const b = buildProtocol(d);
+    return b.warnings.length ? callout('warn', 'Heads up', '<p>' + esc(b.warnings.join(' ')) + '</p>') : '';
+  }
+  function dayChips(f, action, extra) {
+    return '<div class="days">' + [1, 2, 3, 4, 5, 6, 0].map(function (n) { return '<button type="button" class="chip" data-action="' + action + '" data-v="' + n + '"' + (extra || '') + ' aria-pressed="' + (f.days.indexOf(n) >= 0) + '">' + DAY_NAMES[n] + '</button>'; }).join('') + '</div>';
+  }
+  function freqSelect(f, attr) {
+    return '<label class="f"><span class="l">Frequency</span><select ' + attr + '><option value="daily"' + (f.type === 'daily' ? ' selected' : '') + '>Every day</option><option value="weekdays"' + (f.type === 'weekdays' ? ' selected' : '') + '>Specific weekdays</option><option value="everyN"' + (f.type === 'everyN' ? ' selected' : '') + '>Every N days</option></select></label>';
+  }
+  function timeRows(times, attrFn, delAction, delExtra) {
+    return times.map(function (t, j) {
+      return '<div class="row" style="margin-bottom:6px"><label class="f"><span class="l">Label</span><input type="text" ' + attrFn(j, 'label') + ' value="' + esc(t.label) + '"></label><label class="f"><span class="l">Time</span><input type="time" ' + attrFn(j, 'time') + ' value="' + esc(t.time) + '"></label>' +
+        (times.length > 1 ? '<button type="button" class="btn sm fit" data-action="' + delAction + '" data-j="' + j + '"' + delExtra + ' aria-label="Remove this dose time">✕</button>' : '') + '</div>';
+    }).join('');
+  }
+  function stepCardHTML(d, s, i) {
+    const eff = s.custom ? s.times : d.times;
+    const f = s.custom ? s.freq : d.freq;
+    const dpw = C.dosesPerWeek({ type: f.type, days: f.days, n: parseInt(f.n, 10) || 2 }, eff.length);
+    let h = '<div class="stepcard"><div class="card-head" style="margin-bottom:8px"><h3>Step ' + (i + 1) + '</h3>' + (d.steps.length > 1 ? '<button type="button" class="btn sm danger" data-action="dlg-step-del" data-i="' + i + '">Remove step</button>' : '') + '</div>';
+    h += '<div class="row"><label class="f"><span class="l">From week</span><input type="number" inputmode="numeric" min="1" step="1" data-step="' + i + ':from" value="' + esc(s.from) + '"></label><label class="f"><span class="l">To week</span><input type="number" inputmode="numeric" min="1" step="1" data-step="' + i + ':to" value="' + esc(s.to) + '"></label></div>';
+    h += '<div class="small muted" style="margin:10px 0 4px">Schedule for these weeks</div>' + seg('dlg-step-sched', [{ v: 'default', l: 'Protocol default' }, { v: 'custom', l: 'Custom for this step' }], s.custom ? 'custom' : 'default', ' data-i="' + i + '"');
+    if (!s.custom) h += '<p class="small muted" style="margin:6px 0 0">' + esc(freqLabel(d.freq)) + ' · ' + esc(timesLabel(d.times)) + '</p>';
+    else {
+      h += '<div class="stack" style="margin-top:8px">' + freqSelect(s.freq, 'data-sfreq="' + i + '"');
+      if (s.freq.type === 'weekdays') h += dayChips(s.freq, 'dlg-sday', ' data-i="' + i + '"');
+      if (s.freq.type === 'everyN') h += '<label class="f" style="max-width:220px"><span class="l">N (days, counted from this step’s first day)</span><input type="number" inputmode="numeric" min="2" step="1" data-sn="' + i + '" value="' + esc(s.freq.n) + '"></label>';
+      h += '<div class="small muted">Doses per day</div>' + timeRows(s.times, function (j, f) { return 'data-stime="' + i + ':' + j + ':' + f + '"'; }, 'dlg-stime-del', ' data-i="' + i + '"');
+      if (s.times.length < 6) h += '<div><button type="button" class="btn sm" data-action="dlg-stime-add" data-i="' + i + '">+ Add dose time</button></div>';
+      h += '</div>';
+    }
+    h += '<div class="stack" style="margin-top:12px">';
+    if (eff.length > 1) h += '<label class="chk"><input type="checkbox" data-sflag="' + i + '"' + (s.perSlot ? ' checked' : '') + '> Different dose for each time of day</label>';
+    if (!s.perSlot) h += '<label class="f"><span class="l">Dose each time (' + d.doseUnit + ')</span><input type="number" inputmode="decimal" step="any" min="0" data-step="' + i + ':dose" value="' + esc(s.dose) + '"></label>';
+    else h += '<div class="row">' + eff.map(function (t, j) { return '<label class="f"><span class="l">' + esc(t.label || 'Dose ' + (j + 1)) + ' · ' + esc(fmtTime(t.time)) + ' (' + d.doseUnit + ')</span><input type="number" inputmode="decimal" step="any" min="0" data-sslot="' + i + ':' + j + '" value="' + esc(s.slotDoses[j]) + '"></label>'; }).join('') + '</div>';
+    h += '<div class="small muted">≈ ' + dpw + ' dose' + (dpw === 1 ? '' : 's') + ' per week in this step</div></div></div>';
+    return h;
+  }
+  function protoFormHTML(d, err) {
+    normalizeSlots(d);
+    const comps = draftComps(d);
+    const avail = state.vials.filter(function (v) { return v.status === 'active' || v.id === d.vialId; });
+    const srcOpts = '<optgroup label="Reconstituted vials">' + avail.map(function (v) { return '<option value="vial:' + v.id + '"' + (d.sourceKind === 'vial' && d.vialId === v.id ? ' selected' : '') + '>' + esc(v.name + ' · ' + fmt(v.comps.reduce(function (a, c) { return a + c.mg; }, 0), 3) + ' mg in ' + fmt(v.bacMl, 3) + ' mL') + '</option>'; }).join('') + '</optgroup>' +
+      '<optgroup label="Unopened stock (planned)">' + state.stock.map(function (s) { return '<option value="stock:' + s.id + '"' + (d.sourceKind === 'stock' && d.stockId === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') + '</optgroup>' +
+      '<option value="adhoc"' + (d.sourceKind === 'adhoc' ? ' selected' : '') + '>Ad hoc (type the amounts, no inventory)</option>';
+    let h = '<div class="stack"><label class="f"><span class="l">Protocol name (optional)</span><input type="text" data-b="name" value="' + esc(d.name) + '" placeholder="Defaults to the peptide name"></label>';
+    h += '<label class="f"><span class="l">Peptide / blend source</span><select data-b="source">' + srcOpts + '</select></label>';
+    if (d.sourceKind !== 'vial') h += '<label class="f"><span class="l">BAC water for the vial (mL)</span><input type="number" inputmode="decimal" step="any" min="0" data-b="bacMl" value="' + esc(d.bacMl) + '"><span class="small">Used to work out syringe units. For unopened stock, use the amount you plan to add.</span></label>';
+    if (d.sourceKind === 'adhoc') {
+      h += '<label class="f"><span class="l">Load a vial preset (optional)</span><select data-b="preset"><option value="">Choose…</option><optgroup label="Single peptides">' + C.PRESETS.map(function (p) { return '<option value="s:' + esc(p.name) + '">' + esc(p.name + ' ' + p.vials[0] + ' mg') + '</option>'; }).join('') + '</optgroup><optgroup label="Blends">' + C.BLENDS.map(function (b) { return '<option value="b:' + b.id + '">' + esc(b.label) + '</option>'; }).join('') + '</optgroup></select></label>';
+      d.comps.forEach(function (c, i) {
+        h += '<div class="row"><label class="f"><span class="l">Component ' + (i + 1) + '</span><input type="text" data-dcomp="' + i + ':name" value="' + esc(c.name) + '"></label><label class="f"><span class="l">Amount in vial (mg)</span><input type="number" inputmode="decimal" step="any" min="0" data-dcomp="' + i + ':mg" value="' + esc(c.mg) + '"></label>' + (d.comps.length > 1 ? '<button type="button" class="btn sm fit" data-action="dlg-comp-del" data-i="' + i + '">✕</button>' : '') + '</div>';
+      });
+      if (d.comps.length < 4) h += '<div><button type="button" class="btn sm" data-action="dlg-comp-add">+ Add blend component</button></div>';
+    }
+    if (comps.length > 1) h += '<label class="f"><span class="l">Dose by (the doses below are in mcg of this)</span><select data-b="doseBy">' + comps.map(function (c, i) { return '<option value="c' + i + '"' + (d.doseBy === 'c' + i || (i === 0 && !/^c\d|total/.test(d.doseBy)) ? ' selected' : '') + '>' + esc(c.name) + ' (' + fmt(c.mg, 3) + ' mg in vial)</option>'; }).join('') + '<option value="total"' + (d.doseBy === 'total' ? ' selected' : '') + '>Total blend mass</option></select></label>';
+    h += '<div class="row"><label class="f"><span class="l">Syringe</span><select data-b="syringeId">' + C.SYRINGES.map(function (s) { return '<option value="' + s.id + '"' + (d.syringeId === s.id ? ' selected' : '') + '>' + esc(s.label) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="chk"><input type="checkbox" data-b="useNeedle"' + (d.useNeedle ? ' checked' : '') + '> Deduct one syringe per dose</label></div>';
+    h += '<div class="row"><label class="f"><span class="l">Start date</span><input type="date" data-b="start" value="' + esc(d.start) + '"></label><label class="f"><span class="l">Cycle length (weeks)</span><input type="number" inputmode="numeric" min="1" max="104" step="1" data-b="weeks" value="' + esc(d.weeks) + '"></label></div>';
+    // Default schedule
+    h += '<div class="stepbox"><h3>Default schedule</h3><p class="small muted" style="margin:4px 0 8px">Used by every titration step unless that step sets its own schedule below.</p><div class="stack">' + freqSelect(d.freq, 'data-b="freqType"');
+    if (d.freq.type === 'weekdays') h += dayChips(d.freq, 'dlg-day');
+    if (d.freq.type === 'everyN') h += '<label class="f" style="max-width:220px"><span class="l">N (days, counted from the start date)</span><input type="number" inputmode="numeric" min="2" step="1" data-b="freqN" value="' + esc(d.freq.n) + '"></label>';
+    h += '<div class="small muted">Doses per day</div>' + timeRows(d.times, function (j, f) { return 'data-time="' + j + ':' + f + '"'; }, 'dlg-time-del', '');
+    if (d.times.length < 6) h += '<div><button type="button" class="btn sm" data-action="dlg-time-add">+ Add another dose time</button></div>';
+    h += '</div></div>';
+    // Titration steps
+    h += '<div class="stepbox"><div class="card-head" style="margin-bottom:6px"><h3>Titration steps</h3>' + seg('dlg-unit', [{ v: 'mcg', l: 'mcg' }, { v: 'mg', l: 'mg' }], d.doseUnit) + '</div>' +
+      '<p class="small muted" style="margin:0 0 10px">Each step covers whole weeks (inclusive). A step sets the dose and can change how often you dose (frequency and times of day), up or down, and can give each time of day its own dose. You choose every number; the app does not suggest any.</p><div class="stack">';
+    d.steps.forEach(function (s, i) { h += stepCardHTML(d, s, i); });
+    h += '</div>' + (d.steps.length < MAX_STEPS ? '<div style="margin-top:10px"><button type="button" class="btn sm" data-action="dlg-step-add">+ Add step</button></div>' : '') + '</div>';
+    h += '<label class="f"><span class="l">Notes (optional)</span><textarea data-b="note">' + esc(d.note) + '</textarea></label>';
+    h += '<div id="proto-warn">' + protoWarnHTML(d) + '</div></div>';
+    return dlgShell(d.id ? 'Edit protocol' : 'New protocol', h, '<button type="button" class="btn" data-action="dlg-close">Cancel</button><button type="submit" class="btn primary">Save protocol</button>', err);
+  }
+  function openProtocolEditor(id) {
+    const p = id ? state.protocols.find(function (x) { return x.id === id; }) : null;
+    draft = p ? draftFromProtocol(p) : newDraft();
+    const rerender = function () { const sc = dlg.scrollTop; openDlg(protoFormHTML(draft), ctl); dlg.scrollTop = sc; };
+    const parts = function (v) { return v.split(':'); };
+    const ctl = {
+      input: function (e) {
+        const t = e.target, ds = t.dataset;
+        if (ds.b) {
+          const k = ds.b;
+          if (k === 'name') draft.name = t.value; else if (k === 'bacMl') draft.bacMl = t.value; else if (k === 'start') draft.start = t.value; else if (k === 'weeks') draft.weeks = t.value;
+          else if (k === 'freqN') draft.freq.n = t.value; else if (k === 'note') draft.note = t.value; else if (k === 'useNeedle') draft.useNeedle = t.checked;
+        } else if (ds.step) { const s = parts(ds.step); draft.steps[+s[0]][s[1]] = t.value; }
+        else if (ds.sslot) { const s = parts(ds.sslot); draft.steps[+s[0]].slotDoses[+s[1]] = t.value; }
+        else if (ds.sn) draft.steps[+ds.sn].freq.n = t.value;
+        else if (ds.stime) { const s = parts(ds.stime); draft.steps[+s[0]].times[+s[1]][s[2]] = t.value; }
+        else if (ds.time) { const s = parts(ds.time); draft.times[+s[0]][s[1]] = t.value; }
+        else if (ds.dcomp) { const s = parts(ds.dcomp); draft.comps[+s[0]][s[1]] = t.value; }
+        const w = $('#proto-warn'); if (w) w.innerHTML = protoWarnHTML(draft);
+      },
+      change: function (e) {
+        const t = e.target, ds = t.dataset, k = ds.b;
+        if (k === 'source') {
+          if (t.value === 'adhoc') draft.sourceKind = 'adhoc';
+          else { const p2 = t.value.split(':'); draft.sourceKind = p2[0]; if (p2[0] === 'vial') draft.vialId = p2[1]; else draft.stockId = p2[1]; }
+          draft.doseBy = 'c0'; rerender();
+        } else if (k === 'doseBy') draft.doseBy = t.value;
+        else if (k === 'syringeId') draft.syringeId = t.value;
+        else if (k === 'freqType') { draft.freq.type = t.value; rerender(); }
+        else if (ds.sfreq !== undefined) { draft.steps[+ds.sfreq].freq.type = t.value; rerender(); }
+        else if (ds.sflag !== undefined) {
+          const s = draft.steps[+ds.sflag]; s.perSlot = t.checked;
+          if (t.checked) s.slotDoses = (s.custom ? s.times : draft.times).map(function () { return s.dose; });
+          rerender();
+        } else if (k === 'preset' && t.value) {
+          if (t.value[0] === 's') { const pr = C.PRESETS.find(function (x) { return x.name === t.value.slice(2); }); draft.comps = [{ name: pr.name, mg: String(pr.vials[0]) }]; }
+          else { const b = C.BLENDS.find(function (x) { return x.id === t.value.slice(2); }); draft.comps = b.comps.map(function (c) { return { name: c.name, mg: String(c.mg) }; }); if (!draft.name.trim()) draft.name = b.title; }
+          draft.doseBy = 'c0'; rerender();
+        }
+      },
+      click: function (a, d) {
+        const step = d.i !== undefined ? draft.steps[+d.i] : null;
+        if (a === 'dlg-step-add') { const last = draft.steps[draft.steps.length - 1]; const from = last ? (parseInt(last.to, 10) || 0) + 1 : 1; draft.steps.push(newStep(draft, from, Math.max(from, parseInt(draft.weeks, 10) || from))); }
+        else if (a === 'dlg-step-del') draft.steps.splice(+d.i, 1);
+        else if (a === 'dlg-step-sched') {
+          if (d.v === 'custom' && !step.custom) { step.custom = true; step.freq = clone(draft.freq); step.times = clone(draft.times); }
+          else if (d.v === 'default') step.custom = false;
+        }
+        else if (a === 'dlg-sday') { const n = +d.v, i = step.freq.days.indexOf(n); if (i >= 0) step.freq.days.splice(i, 1); else step.freq.days.push(n); }
+        else if (a === 'dlg-stime-add') step.times.push({ label: 'Dose ' + (step.times.length + 1), time: step.times.length === 1 ? '20:00' : '12:00' });
+        else if (a === 'dlg-stime-del') { step.times.splice(+d.j, 1); if (step.perSlot) step.slotDoses.splice(+d.j, 1); }
+        else if (a === 'dlg-time-add') draft.times.push({ label: draft.times.length === 1 ? 'PM' : 'Dose ' + (draft.times.length + 1), time: draft.times.length === 1 ? '20:00' : '12:00' });
+        else if (a === 'dlg-time-del') { draft.times.splice(+d.j, 1); draft.steps.forEach(function (s) { if (!s.custom && s.perSlot) s.slotDoses.splice(+d.j, 1); }); }
+        else if (a === 'dlg-comp-add') draft.comps.push({ name: '', mg: '' });
+        else if (a === 'dlg-comp-del') { draft.comps.splice(+d.i, 1); draft.doseBy = 'c0'; }
+        else if (a === 'dlg-day') { const n = +d.v, i = draft.freq.days.indexOf(n); if (i >= 0) draft.freq.days.splice(i, 1); else draft.freq.days.push(n); }
+        else if (a === 'dlg-unit') {
+          if (d.v === draft.doseUnit) return;
+          const conv = function (x) { const n = num(x); return Number.isFinite(n) ? String(Math.round((d.v === 'mg' ? n / 1000 : n * 1000) * 1e6) / 1e6) : x; };
+          draft.steps.forEach(function (s) { s.dose = conv(s.dose); s.slotDoses = s.slotDoses.map(conv); });
+          draft.doseUnit = d.v;
+        } else return;
+        rerender();
+      },
+      submit: function () {
+        const b = buildProtocol(draft);
+        if (b.errors.length) { setDlgErr(b.errors[0]); return; }
+        const i = state.protocols.findIndex(function (x) { return x.id === b.p.id; });
+        if (i >= 0) state.protocols[i] = b.p; else state.protocols.push(b.p);
+        save(); closeDlg(); render(); toast('Protocol saved');
+      },
+    };
+    openDlg(protoFormHTML(draft), ctl);
+  }
+  const plannerActions = {
+    'proto-new': function () { openProtocolEditor(null); },
+    'proto-edit': function (d) { openProtocolEditor(d.id); },
+    'proto-dup': function (d) {
+      const p = state.protocols.find(function (x) { return x.id === d.id; }); if (!p) return;
+      const c = JSON.parse(JSON.stringify(p)); c.id = C.uid(); c.name = p.name + ' (copy)'; c.start = today();
+      state.protocols.push(c); save(); render(); toast('Duplicated; edit the copy’s dates and doses');
+    },
+    'proto-toggle': function (d) { const p = state.protocols.find(function (x) { return x.id === d.id; }); if (p) { p.active = p.active === false; save(); render(); } },
+    'proto-del': function (d) {
+      const p = state.protocols.find(function (x) { return x.id === d.id; }); if (!p) return;
+      if (!confirm('Delete protocol “' + p.name + '” and its dose log? Stock already deducted for logged doses stays deducted.')) return;
+      state.protocols = state.protocols.filter(function (x) { return x.id !== d.id; });
+      Object.keys(state.logs).forEach(function (k) { if (state.logs[k].protocolId === d.id) delete state.logs[k]; });
+      save(); render();
+    },
+    'cal-shift': function (d) { ui.calStart = C.addDays(ui.calStart, +d.v); render(); },
+    'cal-today': function () { ui.calStart = mondayOf(today()); render(); },
+    'cal-day': function (d) { ui.date = d.v; setTab('today'); },
+  };
+
+  // ---------- Inventory ----------
+  function detachProtocols(kind, id) {
+    state.protocols.forEach(function (p) {
+      if (kind === 'vial' && p.vialId === id) {
+        const v = state.vials.find(function (x) { return x.id === id; });
+        if (v) { p.comps = v.comps.map(function (c) { return { name: c.name, mg: c.mg }; }); p.bacMl = v.bacMl; }
+        p.vialId = null;
+      }
+      if (kind === 'stock' && p.stockId === id) {
+        const s = state.stock.find(function (x) { return x.id === id; });
+        if (s) p.comps = s.comps.map(function (c) { return { name: c.name, mg: c.mg }; });
+        p.stockId = null;
+      }
+    });
+  }
+  function usedBy(kind, id) {
+    return state.protocols.filter(function (p) { return kind === 'vial' ? p.vialId === id : p.stockId === id; });
+  }
+  function vialCardHTML(v) {
+    const pct = v.comps.length && v.comps[0].mg > 0 ? Math.max(0, Math.min(100, v.remaining[0] / v.comps[0].mg * 100)) : 0;
+    const mlLeft = vialMlLeft(v), t = today();
+    const users = usedBy('vial', v.id);
+    let h = '<div class="item"><div class="item-head"><div><div class="item-title">' + esc(v.name) + '</div><div class="small muted">' + esc(v.comps.map(function (c) { return c.name + ' ' + fmt(c.mg, 3) + ' mg'; }).join(' + ')) + ' in ' + fmt(v.bacMl, 3) + ' mL BAC water</div></div><div>' + (v.status === 'finished' ? '<span class="pill">Finished</span>' : expiryPill(v)) + '</div></div>';
+    h += '<div class="bar' + (pct < 15 ? ' low' : '') + '" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+    h += '<div class="kv"><span>Remaining: <b>' + esc(remainingText(v)) + '</b></span>' + (Number.isFinite(mlLeft) ? '<span>≈ <b>' + fmt(mlLeft, 2) + '</b> mL left</span>' : '') + '</div>';
+    h += '<div class="kv" style="margin-top:4px">' + v.comps.map(function (c) { return '<span>' + (v.comps.length > 1 ? esc(c.name) + ' ' : '') + 'conc.: <b>' + fmt(c.mg / v.bacMl, 3) + ' mg/mL</b></span>'; }).join('') +
+      '<span>Mixed: ' + (v.mixedOn ? esc(fmtDate(v.mixedOn, { year: true })) : '—') + '</span>' + (v.location ? '<span>' + esc(v.location) + '</span>' : '') + '</div>';
+    if (v.status === 'active') {
+      const pr = C.projectVial(state, v.id, t);
+      h += '<p class="small" style="margin:8px 0 0">' + vialProjHTML(v) + (pr && pr.hasSchedule && Number.isFinite(pr.dosesAtNextDose) ? ' At the next scheduled dose size (' + fmt(pr.nextDoseMcg, 3) + ' mcg) there are ' + pr.dosesAtNextDose + ' full doses left.' : '') + '</p>';
+      if (users.length) h += '<p class="small muted" style="margin:2px 0 0">Used by: ' + esc(users.map(function (p) { return p.name; }).join(', ')) + '</p>';
+    }
+    if (v.note) h += '<p class="small">' + esc(v.note) + '</p>';
+    h += '<div class="item-actions"><button class="btn sm" data-action="vial-edit" data-id="' + v.id + '">Edit / adjust</button><button class="btn sm" data-action="vial-finish" data-id="' + v.id + '">' + (v.status === 'finished' ? 'Reopen' : 'Mark finished') + '</button><button class="btn sm danger" data-action="vial-del" data-id="' + v.id + '">Delete</button></div></div>';
+    return h;
+  }
+  function stockCardHTML(s) {
+    const low = s.reorderAt !== null && s.count <= s.reorderAt;
+    const pr = C.projectSupply(state, s, today());
+    let h = '<div class="item"><div class="item-head"><div><div class="item-title">' + esc(s.name) + '</div><div class="small muted">' + esc(s.comps.map(function (c) { return c.name + ' ' + fmt(c.mg, 3) + ' mg'; }).join(' + ')) + ' per vial' + (s.location ? ' · ' + esc(s.location) : '') + '</div></div><div><span class="dose-big" style="color:' + (low ? 'var(--danger)' : 'var(--text)') + '">' + s.count + '</span> <span class="muted small">unopened</span></div></div>';
+    h += '<div class="kv"><span>' + (s.reorderAt !== null ? 'Reorder at ' + s.reorderAt : 'No reorder level set') + '</span>' + (low ? '<span class="pill bad">Reorder</span>' : '') + '</div>';
+    if (pr.hasSchedule) h += '<p class="small" style="margin:6px 0 0">' + (pr.runsOutOn ? 'Supply (these vials plus any open one) is projected to run out on <b>' + esc(fmtDate(pr.runsOutOn, { year: true })) + '</b> (' + relDays(pr.runsOutOn) + ').' : 'Covers all ' + pr.dosesCovered + ' remaining scheduled doses.') + '</p>';
+    if (s.note) h += '<p class="small">' + esc(s.note) + '</p>';
+    h += '<div class="item-actions"><button class="btn sm primary" data-action="reconstitute" data-id="' + s.id + '"' + (s.count < 1 ? ' disabled' : '') + '>Reconstitute…</button><button class="btn sm" data-action="adj" data-kind="stock" data-id="' + s.id + '" data-d="-1">−1</button><button class="btn sm" data-action="adj" data-kind="stock" data-id="' + s.id + '" data-d="1">+1</button><button class="btn sm" data-action="stock-edit" data-id="' + s.id + '">Edit</button><button class="btn sm danger" data-action="stock-del" data-id="' + s.id + '">Delete</button></div></div>';
+    return h;
+  }
+  function bacCardHTML(b) {
+    const total = b.bottles * b.mlEach;
+    const pct = total > 0 ? Math.max(0, Math.min(100, b.remainingMl / total * 100)) : 0;
+    const low = b.reorderAt !== null && b.remainingMl <= b.reorderAt;
+    return '<div class="item"><div class="item-head"><div><div class="item-title">' + esc(bacLabel(b)) + '</div><div class="small muted">' + b.bottles + ' × ' + fmt(b.mlEach, 2) + ' mL bottle' + (b.bottles === 1 ? '' : 's') + '</div></div><div><span class="dose-big" style="color:' + (low ? 'var(--danger)' : 'var(--text)') + '">' + fmt(b.remainingMl, 2) + '</span> <span class="muted small">mL left</span></div></div>' +
+      '<div class="bar' + (low ? ' low' : '') + '"><i style="width:' + pct.toFixed(1) + '%"></i></div><div class="kv"><span>' + (b.reorderAt !== null ? 'Reorder at ' + fmt(b.reorderAt, 1) + ' mL' : 'No reorder level set') + '</span>' + (low ? '<span class="pill bad">Reorder</span>' : '') + '</div>' +
+      '<div class="item-actions"><button class="btn sm" data-action="bac-addbottle" data-id="' + b.id + '">+ Add a bottle</button><button class="btn sm" data-action="bac-edit" data-id="' + b.id + '">Edit</button><button class="btn sm danger" data-action="bac-del" data-id="' + b.id + '">Delete</button></div></div>';
+  }
+  function countCardHTML(kind, n) {
+    const low = n.reorderAt !== null && n.count <= n.reorderAt;
+    const title = kind === 'needle' ? C.needleLabel(n) : (n.label || 'Alcohol swabs');
+    let proj = '';
+    if (kind === 'needle') { const pr = C.projectNeedleType(state, n.type, today()); if (pr.hasSchedule) proj = pr.runsOutOn ? 'All ' + syringeById(n.type).label + ' stock is projected to run out on <b>' + esc(fmtDate(pr.runsOutOn, { year: true })) + '</b> (' + relDays(pr.runsOutOn) + ').' : 'Covers all scheduled doses.'; }
+    else { const pr = C.projectSwabs(state, today()); if (pr.hasSchedule) proj = pr.runsOutOn ? 'Projected to run out on <b>' + esc(fmtDate(pr.runsOutOn, { year: true })) + '</b>.' : 'Covers all scheduled doses.'; }
+    return '<div class="item"><div class="item-head"><div><div class="item-title">' + esc(title) + '</div><div class="small muted">' + (n.reorderAt !== null ? 'Reorder at ' + n.reorderAt : 'No reorder level set') + '</div></div><div><span class="dose-big" style="color:' + (low ? 'var(--danger)' : 'var(--text)') + '">' + n.count + '</span> ' + (low ? '<span class="pill bad">Reorder</span>' : '') + '</div></div>' + (proj ? '<p class="small" style="margin:6px 0 0">' + proj + '</p>' : '') +
+      '<div class="item-actions"><button class="btn sm" data-action="adj" data-kind="' + kind + '" data-id="' + n.id + '" data-d="-1">−1</button><button class="btn sm" data-action="adj" data-kind="' + kind + '" data-id="' + n.id + '" data-d="1">+1</button><button class="btn sm" data-action="adj" data-kind="' + kind + '" data-id="' + n.id + '" data-d="10">+10</button><button class="btn sm" data-action="' + kind + '-edit" data-id="' + n.id + '">Edit</button><button class="btn sm danger" data-action="' + kind + '-del" data-id="' + n.id + '">Delete</button></div></div>';
+  }
+  function renderInventory() {
+    const active = state.vials.filter(function (v) { return v.status === 'active'; });
+    const done = state.vials.filter(function (v) { return v.status === 'finished'; });
+    const sec = function (title, addAction, addLabel) { return '<div class="sec-title"><h2>' + title + '</h2><button class="btn sm primary" data-action="' + addAction + '">' + addLabel + '</button></div>'; };
+    let h = lowBannerHTML();
+    h += sec('Reconstituted vials', 'vial-new', '+ Add mixed vial') + (active.length ? active.map(vialCardHTML).join('') : '<div class="card empty">No reconstituted vials. Use “Reconstitute…” on an unopened vial below, or add one you have already mixed.</div>');
+    if (done.length) h += '<details class="card"><summary>Finished vials (' + done.length + ')</summary><div style="margin-top:10px">' + done.map(vialCardHTML).join('') + '</div></details>';
+    h += sec('Unopened vials', 'stock-new', '+ Add peptide stock') + (state.stock.length ? state.stock.map(stockCardHTML).join('') : '<div class="card empty">No unopened peptides tracked yet.</div>');
+    h += sec('BAC water', 'bac-new', '+ Add BAC water') + (state.bac.length ? state.bac.map(bacCardHTML).join('') : '<div class="card empty">No BAC water tracked yet.</div>');
+    h += sec('Needles / syringes', 'needle-new', '+ Add syringes') + (state.needles.length ? state.needles.map(function (n) { return countCardHTML('needle', n); }).join('') : '<div class="card empty">No syringes tracked yet. Logging a dose deducts one from the matching type.</div>');
+    h += sec('Alcohol swabs (optional)', 'swab-new', '+ Add swabs') + (state.swabs.length ? state.swabs.map(function (n) { return countCardHTML('swab', n); }).join('') : '<div class="card empty">Optional. Turn on “deduct a swab per dose” in Settings to track these automatically.</div>');
+    h += '<p class="footer">Reconstituted-vial expiry dates are reminders you set yourself, not medical guidance. ' + esc(DISCLAIMER) + '</p>';
+    $('#view').innerHTML = h;
+  }
+
+  // Forms
+  function compFields(comps, withRemaining) {
+    const f = [];
+    for (let i = 0; i < 4; i++) {
+      const c = comps[i] || {};
+      const row = [{ type: 'text', name: 'cn' + i, label: i === 0 ? 'Peptide 1 name' : 'Peptide ' + (i + 1) + (i < 2 ? ' (blends)' : ' (optional)'), value: c.name || '' },
+        { type: 'number', name: 'cm' + i, label: 'Amount (mg)', value: c.mg === undefined ? '' : c.mg }];
+      if (withRemaining) row.push({ type: 'number', name: 'cr' + i, label: 'Remaining (mg)', value: c.remaining === undefined ? '' : Math.round(c.remaining * 1e6) / 1e6 });
+      f.push({ row: row });
+    }
+    return f;
+  }
+  function parseComps(v, withRemaining) {
+    const comps = [], remaining = [];
+    for (let i = 0; i < 4; i++) {
+      const name = v['cn' + i] || '', mg = v['cm' + i];
+      if (!name && !(mg > 0)) continue;
+      if (!name || !(mg > 0)) return { err: 'Peptide ' + (i + 1) + ' needs both a name and an amount above 0 mg.' };
+      comps.push({ name: name, mg: mg });
+      const r = withRemaining ? v['cr' + i] : null;
+      remaining.push(r === null || r === undefined || !(r >= 0) ? mg : r);
+    }
+    if (!comps.length) return { err: 'Enter at least one peptide and its amount.' };
+    return { comps: comps, remaining: remaining };
+  }
+  function optNum(v) { return v === null || v === undefined || !(v >= 0) ? null : v; }
+  function afterInv(msg) { save(); render(); if (msg) toast(msg); }
+  function openStockForm(id) {
+    const s = id ? state.stock.find(function (x) { return x.id === id; }) : null;
+    openForm({
+      title: s ? 'Edit unopened stock' : 'Add unopened peptide stock', submitLabel: s ? 'Save' : 'Add',
+      intro: '<div class="callout small">Enter what the label says. For a blend, fill in each peptide’s amount per vial; suppliers differ, so check your label.</div>',
+      fields: [{ type: 'text', name: 'name', label: 'Name (optional, defaults to the peptide names)', value: s ? s.name : '' }].concat(compFields(s ? s.comps : [])).concat([
+        { row: [{ type: 'number', name: 'count', label: 'Unopened vials in stock', value: s ? s.count : 1 }, { type: 'number', name: 'reorderAt', label: 'Reorder at (vials)', value: s && s.reorderAt !== null ? s.reorderAt : '' }] },
+        { type: 'text', name: 'location', label: 'Location (e.g. freezer, fridge)', value: s ? s.location : '' }, { type: 'textarea', name: 'note', label: 'Notes', value: s ? s.note : '' }]),
+      onSubmit: function (v) {
+        const pc = parseComps(v, false); if (pc.err) return pc.err;
+        if (!(v.count >= 0)) return 'Enter the number of vials (0 or more).';
+        const o = { id: s ? s.id : C.uid(), name: v.name || C.mixTitle(pc.comps), comps: pc.comps, count: Math.floor(v.count), location: v.location, reorderAt: optNum(v.reorderAt), note: v.note };
+        if (s) Object.assign(s, o); else state.stock.push(o);
+        afterInv('Saved');
+      },
+    });
+  }
+  function openVialForm(id) {
+    const v0 = id ? state.vials.find(function (x) { return x.id === id; }) : null;
+    const comps = v0 ? v0.comps.map(function (c, i) { return { name: c.name, mg: c.mg, remaining: v0.remaining[i] }; }) : [];
+    openForm({
+      title: v0 ? 'Edit vial' : 'Add a reconstituted vial', submitLabel: v0 ? 'Save' : 'Add',
+      intro: '<div class="callout small">' + (v0 ? 'Remaining amounts update automatically as you log doses. Change them here only to correct a mistake.' : 'For a vial you have already mixed. Leave “Remaining” blank to start with the full amount.') + '</div>',
+      fields: [{ type: 'text', name: 'name', label: 'Name (optional)', value: v0 ? v0.name : '' }].concat(compFields(comps, true)).concat([
+        { row: [{ type: 'number', name: 'bac', label: 'BAC water added (mL)', value: v0 ? v0.bacMl : '' }, { type: 'date', name: 'mixed', label: 'Date mixed', value: v0 && v0.mixedOn ? v0.mixedOn : today() }] },
+        { type: 'date', name: 'expiry', label: 'Expiry / discard-by date (optional)', value: v0 ? (v0.expiry || '') : C.addDays(today(), state.settings.expiryDays), hint: 'Your own reminder. Vials are often given ~' + state.settings.expiryDays + ' days after mixing, but this varies; follow your own source. You can change the default in Settings.' },
+        { type: 'text', name: 'location', label: 'Location (e.g. fridge)', value: v0 ? v0.location : 'Fridge' }, { type: 'textarea', name: 'note', label: 'Notes', value: v0 ? v0.note : '' }]).concat(v0 ? [{ type: 'select', name: 'status', label: 'Status', value: v0.status, options: [{ v: 'active', l: 'Active' }, { v: 'finished', l: 'Finished' }] }] : []),
+      onSubmit: function (v) {
+        const pc = parseComps(v, true); if (pc.err) return pc.err;
+        if (!(v.bac > 0)) return 'Enter the BAC water volume added (mL).';
+        if (!C.isYmd(v.mixed)) return 'Choose the date mixed.';
+        const o = { name: v.name || C.mixTitle(pc.comps), comps: pc.comps, remaining: pc.remaining, bacMl: v.bac, mixedOn: v.mixed, expiry: C.isYmd(v.expiry) ? v.expiry : null, location: v.location, note: v.note };
+        if (v0) { Object.assign(v0, o, { status: v.status }); } else state.vials.push(Object.assign({ id: C.uid(), productId: null, status: 'active' }, o));
+        afterInv('Saved');
+      },
+    });
+  }
+  function openReconstitute(id) {
+    const s = state.stock.find(function (x) { return x.id === id; }); if (!s) return;
+    const bacOpts = [{ v: '', l: 'Don’t deduct BAC water' }].concat(state.bac.map(function (b) { return { v: b.id, l: bacLabel(b) + ' (' + fmt(b.remainingMl, 2) + ' mL left)' }; }));
+    const linkable = C.linkableProtocols(state, s);
+    openForm({
+      title: 'Reconstitute ' + s.name, submitLabel: 'Reconstitute',
+      intro: '<div class="callout small">Moves one vial from unopened stock (' + s.count + ' left) to a new reconstituted vial of <b>' + esc(s.comps.map(function (c) { return c.name + ' ' + fmt(c.mg, 3) + ' mg'; }).join(' + ')) + '</b>, and deducts the BAC water you add.</div>',
+      fields: [
+        { type: 'number', name: 'bac', label: 'BAC water to add (mL)', value: linkable.length && linkable[0].bacMl ? linkable[0].bacMl : '' },
+        { type: 'select', name: 'bacId', label: 'Take it from', value: state.bac.length ? state.bac[0].id : '', options: bacOpts },
+        { row: [{ type: 'date', name: 'mixed', label: 'Date mixed', value: today() }, { type: 'date', name: 'expiry', label: 'Expiry / discard-by (optional)', value: C.addDays(today(), state.settings.expiryDays) }] },
+        { type: 'text', name: 'location', label: 'Location', value: s.location || 'Fridge' },
+      ].concat(linkable.length ? [{ type: 'checkbox', name: 'link', label: 'Link to protocol' + (linkable.length > 1 ? 's' : '') + ': ' + linkable.map(function (p) { return p.name; }).join(', '), value: true }] : []),
+      onSubmit: function (v) {
+        if (!C.isYmd(v.mixed)) return 'Choose the date mixed.';
+        try {
+          const r = C.reconstitute(state, { stockId: s.id, bacMl: v.bac, bacId: v.bacId, mixedOn: v.mixed, expiry: C.isYmd(v.expiry) ? v.expiry : null, location: v.location, linkProtocols: !!v.link });
+          const conc = r.vial.comps.map(function (c) { return fmt(c.mg / r.vial.bacMl, 3) + ' mg/mL' + (r.vial.comps.length > 1 ? ' ' + c.name : ''); }).join(', ');
+          afterInv('Reconstituted: ' + conc + (r.linked ? ' · linked to ' + r.linked + ' protocol' + (r.linked > 1 ? 's' : '') : ''));
+        } catch (e) { return e.message; }
+      },
+    });
+  }
+  function openBacForm(id) {
+    const b = id ? state.bac.find(function (x) { return x.id === id; }) : null;
+    openForm({
+      title: b ? 'Edit BAC water' : 'Add BAC water', submitLabel: b ? 'Save' : 'Add',
+      fields: [{ type: 'text', name: 'label', label: 'Label (optional)', value: b ? b.label : '', placeholder: 'e.g. 30 mL multi-dose vial' },
+        { row: [{ type: 'number', name: 'bottles', label: 'Bottles', value: b ? b.bottles : 1 }, { type: 'number', name: 'mlEach', label: 'mL per bottle', value: b ? b.mlEach : '' }] },
+        { row: [{ type: 'number', name: 'remaining', label: 'Remaining mL (blank = all full)', value: b ? Math.round(b.remainingMl * 1e4) / 1e4 : '' }, { type: 'number', name: 'reorderAt', label: 'Reorder at (mL)', value: b && b.reorderAt !== null ? b.reorderAt : '' }] }],
+      onSubmit: function (v) {
+        if (!(v.bottles >= 1) || !(v.mlEach > 0)) return 'Enter the number of bottles (1+) and mL per bottle.';
+        const o = { label: v.label, bottles: Math.floor(v.bottles), mlEach: v.mlEach, remainingMl: v.remaining !== null && v.remaining >= 0 ? v.remaining : Math.floor(v.bottles) * v.mlEach, reorderAt: optNum(v.reorderAt) };
+        if (b) Object.assign(b, o); else state.bac.push(Object.assign({ id: C.uid() }, o));
+        afterInv('Saved');
+      },
+    });
+  }
+  function openNeedleForm(id) {
+    const n = id ? state.needles.find(function (x) { return x.id === id; }) : null;
+    openForm({
+      title: n ? 'Edit syringes' : 'Add syringes', submitLabel: n ? 'Save' : 'Add',
+      fields: [{ type: 'select', name: 'type', label: 'Type', value: n ? n.type : C.DEFAULT_SYRINGE_ID, options: C.SYRINGES.map(function (s) { return { v: s.id, l: s.label }; }) },
+        { type: 'text', name: 'label', label: 'Note (optional, e.g. gauge / needle length)', value: n ? n.label : '' },
+        { row: [{ type: 'number', name: 'count', label: 'In stock', value: n ? n.count : '' }, { type: 'number', name: 'reorderAt', label: 'Reorder at', value: n && n.reorderAt !== null ? n.reorderAt : '' }] }],
+      onSubmit: function (v) {
+        if (!(v.count >= 0)) return 'Enter how many you have.';
+        const o = { type: v.type, label: v.label, count: Math.floor(v.count), reorderAt: optNum(v.reorderAt) };
+        if (n) Object.assign(n, o); else state.needles.push(Object.assign({ id: C.uid() }, o));
+        afterInv('Saved');
+      },
+    });
+  }
+  function openSwabForm(id) {
+    const n = id ? state.swabs.find(function (x) { return x.id === id; }) : null;
+    openForm({
+      title: n ? 'Edit swabs' : 'Add alcohol swabs', submitLabel: n ? 'Save' : 'Add',
+      fields: [{ type: 'text', name: 'label', label: 'Label (optional)', value: n ? n.label : '' },
+        { row: [{ type: 'number', name: 'count', label: 'In stock', value: n ? n.count : '' }, { type: 'number', name: 'reorderAt', label: 'Reorder at', value: n && n.reorderAt !== null ? n.reorderAt : '' }] }],
+      onSubmit: function (v) {
+        if (!(v.count >= 0)) return 'Enter how many you have.';
+        const o = { label: v.label, count: Math.floor(v.count), reorderAt: optNum(v.reorderAt) };
+        if (n) Object.assign(n, o); else state.swabs.push(Object.assign({ id: C.uid() }, o));
+        afterInv('Saved');
+      },
+    });
+  }
+  const inventoryActions = {
+    'vial-new': function () { openVialForm(null); }, 'vial-edit': function (d) { openVialForm(d.id); },
+    'vial-finish': function (d) { const v = state.vials.find(function (x) { return x.id === d.id; }); if (v) { v.status = v.status === 'finished' ? 'active' : 'finished'; afterInv(); } },
+    'vial-del': function (d) {
+      const v = state.vials.find(function (x) { return x.id === d.id; }); if (!v) return;
+      const u = usedBy('vial', v.id);
+      if (!confirm('Delete vial “' + v.name + '”?' + (u.length ? ' Protocols using it (' + u.map(function (p) { return p.name; }).join(', ') + ') will keep its numbers as ad hoc.' : ''))) return;
+      detachProtocols('vial', v.id); state.vials = state.vials.filter(function (x) { return x.id !== v.id; }); afterInv();
+    },
+    'stock-new': function () { openStockForm(null); }, 'stock-edit': function (d) { openStockForm(d.id); },
+    'stock-del': function (d) {
+      const s = state.stock.find(function (x) { return x.id === d.id; }); if (!s) return;
+      if (!confirm('Delete stock item “' + s.name + '”?')) return;
+      detachProtocols('stock', s.id); state.stock = state.stock.filter(function (x) { return x.id !== s.id; }); afterInv();
+    },
+    'reconstitute': function (d) { openReconstitute(d.id); },
+    'bac-new': function () { openBacForm(null); }, 'bac-edit': function (d) { openBacForm(d.id); },
+    'bac-addbottle': function (d) { const b = state.bac.find(function (x) { return x.id === d.id; }); if (b) { b.bottles += 1; b.remainingMl += b.mlEach; afterInv('Added one ' + fmt(b.mlEach, 1) + ' mL bottle'); } },
+    'bac-del': function (d) { if (confirm('Delete this BAC water entry?')) { state.bac = state.bac.filter(function (x) { return x.id !== d.id; }); afterInv(); } },
+    'needle-new': function () { openNeedleForm(null); }, 'needle-edit': function (d) { openNeedleForm(d.id); },
+    'needle-del': function (d) { if (confirm('Delete this syringe entry?')) { state.needles = state.needles.filter(function (x) { return x.id !== d.id; }); afterInv(); } },
+    'swab-new': function () { openSwabForm(null); }, 'swab-edit': function (d) { openSwabForm(d.id); },
+    'swab-del': function (d) { if (confirm('Delete this swab entry?')) { state.swabs = state.swabs.filter(function (x) { return x.id !== d.id; }); afterInv(); } },
+    'adj': function (d) {
+      const list = d.kind === 'stock' ? state.stock : d.kind === 'needle' ? state.needles : state.swabs;
+      const it = list.find(function (x) { return x.id === d.id; });
+      if (it) { it.count = Math.max(0, it.count + parseInt(d.d, 10)); afterInv(); }
+    },
+  };
+
+  // ---------- Settings, backup, sample data ----------
+  function exportJSON() {
+    state.meta.lastExport = new Date().toISOString(); save();
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'peptide-app-backup-' + today() + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    toast('Backup downloaded');
+  }
+  function importJSONText(text) {
+    let next;
+    try { next = C.normalizeState(JSON.parse(text)); } catch (e) { alert('Import failed: ' + (e instanceof SyntaxError ? 'that file is not valid JSON.' : e.message)); return false; }
+    if (!confirm('Replace ALL current data with this backup? ' + next.protocols.length + ' protocol(s), ' + next.vials.length + ' vial(s), ' + Object.keys(next.logs).length + ' logged dose(s). This can’t be undone (export first if unsure).')) return false;
+    state = next; save(); applyTheme(); closeDlg(); render(); toast('Backup imported'); return true;
+  }
+  function applyTheme() {
+    const t = state.settings.theme;
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+  }
+  function openSettings() {
+    const s = state.settings;
+    const body = '<div class="stack"><div><div class="small muted" style="margin-bottom:6px">Theme</div>' + seg('set-theme', [{ v: 'auto', l: 'Auto' }, { v: 'light', l: 'Light' }, { v: 'dark', l: 'Dark' }], s.theme) + '</div>' +
+      '<div class="row"><label class="f"><span class="l">Default vial expiry (days after mixing)</span><input type="number" step="1" min="1" name="expiryDays" value="' + s.expiryDays + '"></label><label class="f"><span class="l">Warn when stock runs out within (days)</span><input type="number" step="1" min="0" name="leadDays" value="' + s.leadDays + '"></label></div>' +
+      '<label class="f" style="max-width:300px"><span class="l">Flag an active vial when this many doses or fewer remain</span><input type="number" step="1" min="0" name="vialLowDoses" value="' + s.vialLowDoses + '"></label>' +
+      '<label class="chk"><input type="checkbox" name="swabPerDose"' + (s.swabPerDose ? ' checked' : '') + '> Deduct one alcohol swab per logged dose</label>' +
+      '<div class="callout"><strong class="lead">Your data</strong><p class="small">Everything is stored only in this browser on this device (localStorage). Clearing site data or switching browser/URL loses it, so export a backup now and then. ' + 'Last backup: ' + (state.meta.lastExport ? esc(new Date(state.meta.lastExport).toLocaleString()) : 'never') + '.</p><div class="row"><button type="button" class="btn" data-action="export">⬇ Export JSON</button><button type="button" class="btn" data-action="import">⬆ Import JSON…</button></div></div>' +
+      '<div class="row"><button type="button" class="btn" data-action="load-sample">Load demo data</button><button type="button" class="btn danger" data-action="reset-all">Erase everything</button></div>' +
+      '<div class="callout"><strong class="lead">Math tool only</strong><p class="small">' + esc(DISCLAIMER) + '</p></div></div>';
+    openDlg(dlgShell('Settings & backup', body, '<button type="button" class="btn" data-action="dlg-close">Cancel</button><button type="submit" class="btn primary">Save settings</button>'), {
+      submit: function (form) {
+        const n = function (k, d, min) { const v = parseInt(form.elements[k].value, 10); return Number.isFinite(v) && v >= min ? v : d; };
+        s.expiryDays = n('expiryDays', 28, 1); s.leadDays = n('leadDays', 14, 0); s.vialLowDoses = n('vialLowDoses', 3, 0); s.swabPerDose = form.elements.swabPerDose.checked;
+        save(); closeDlg(); render(); toast('Settings saved');
+      },
+    });
+  }
+  function makeSample() {
+    const s = C.defaultState();
+    const t = today(), start = C.addDays(t, -15);
+    s.bac.push({ id: 'bac1', label: 'BAC water 30 mL (demo)', mlEach: 30, bottles: 2, remainingMl: 56, reorderAt: 20 });
+    s.needles.push({ id: 'nd1', type: 'u100-1', label: '31G (demo)', count: 40, reorderAt: 20 });
+    s.needles.push({ id: 'nd2', type: 'u100-0.3', label: '', count: 60, reorderAt: 15 });
+    s.swabs.push({ id: 'sw1', label: '', count: 100, reorderAt: 30 });
+    s.stock.push({ id: 'st1', name: 'BPC-157 / TB-500', comps: [{ name: 'BPC-157', mg: 10 }, { name: 'TB-500', mg: 10 }], count: 1, location: 'Freezer', reorderAt: 1, note: '' });
+    s.stock.push({ id: 'st2', name: 'GLOW', comps: [{ name: 'GHK-Cu', mg: 50 }, { name: 'BPC-157', mg: 10 }, { name: 'TB-500', mg: 10 }], count: 2, location: 'Fridge', reorderAt: 1, note: '' });
+    s.vials.push({ id: 'v1', name: 'BPC-157 / TB-500', productId: 'st1', comps: [{ name: 'BPC-157', mg: 10 }, { name: 'TB-500', mg: 10 }], remaining: [10, 10], bacMl: 2, mixedOn: start, expiry: C.addDays(start, 28), location: 'Fridge', note: '', status: 'active' });
+    s.vials.push({ id: 'v2', name: 'CJC-1295 (no DAC) / Ipamorelin', productId: null, comps: [{ name: 'CJC-1295 (no DAC)', mg: 5 }, { name: 'Ipamorelin', mg: 5 }], remaining: [5, 5], bacMl: 2.5, mixedOn: C.addDays(start, 1), expiry: C.addDays(start, 29), location: 'Fridge', note: '', status: 'active' });
+    const base = { active: true, stockId: null, comps: [], bacMl: 0, useNeedle: true, needleId: null, start: start, doseUnit: 'mcg', note: 'Demo numbers only, not a suggestion.' };
+    const AM = [{ label: 'AM', time: '08:00' }];
+    // Frequency ramp: 3x/week AM -> daily AM -> daily AM+PM (different dose per slot) -> back down to daily AM.
+    s.protocols.push(Object.assign({}, base, { id: 'p1', name: 'BPC/TB ramp (demo)', vialId: 'v1', doseBy: 'c0', syringeId: 'u100-1', weeks: 6,
+      freq: { type: 'daily', days: [], n: 2 }, times: [{ label: 'AM', time: '08:00' }, { label: 'PM', time: '20:00' }],
+      steps: [
+        { from: 1, to: 1, doseMcg: 250, freq: { type: 'weekdays', days: [1, 3, 5], n: 2 }, times: AM, slotDoses: null },
+        { from: 2, to: 2, doseMcg: 250, freq: { type: 'daily', days: [], n: 2 }, times: AM, slotDoses: null },
+        { from: 3, to: 5, doseMcg: 250, freq: null, times: null, slotDoses: [250, 500] },
+        { from: 6, to: 6, doseMcg: 250, freq: { type: 'daily', days: [], n: 2 }, times: AM, slotDoses: null },
+      ] }));
+    s.protocols.push(Object.assign({}, base, { id: 'p2', name: 'CJC/Ipa (demo)', vialId: 'v2', doseBy: 'c0', syringeId: 'u100-0.3', weeks: 8,
+      steps: [{ from: 1, to: 8, doseMcg: 100, freq: null, times: null, slotDoses: null }], freq: { type: 'weekdays', days: [1, 2, 3, 4, 5], n: 2 }, times: [{ label: 'PM', time: '21:00' }] }));
+    for (let i = 0; i < 15; i++) {
+      const d = C.addDays(start, i);
+      C.dosesOn(s, d).forEach(function (x, k) { C.setLog(s, { protocolId: x.protocol.id, date: d, slot: x.slot, status: (i === 10 && k === 0 && x.protocol.id === 'p2') ? 'skipped' : 'taken' }); });
+    }
+    return s;
+  }
+  function loadSample() {
+    const hasData = state.protocols.length || state.vials.length || state.stock.length || state.needles.length || state.bac.length;
+    if (hasData && !confirm('Loading demo data will REPLACE your current data. Export a backup first if you want to keep it. Continue?')) return;
+    const keep = state.settings;
+    state = makeSample(); state.settings = Object.assign({}, state.settings, keep);
+    save(); closeDlg(); ui.date = today(); setTab('today'); toast('Demo data loaded (illustrative numbers only)');
+  }
+
+  // ---------- Router & rendering ----------
+  const TABS = ['calc', 'today', 'planner', 'inventory'];
+  function setTab(t) {
+    ui.tab = TABS.indexOf(t) >= 0 ? t : 'calc';
+    try { history.replaceState(null, '', '#' + ui.tab); } catch (e) { /* file:// in some browsers */ }
+    render(); window.scrollTo(0, 0);
+  }
+  function render() {
+    $$('#tabs [data-tab]').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === ui.tab)); });
+    ({ calc: renderCalc, today: renderToday, planner: renderPlanner, inventory: renderInventory })[ui.tab]();
+    const pending = C.dosesOn(state, today()).filter(function (x) { return x.status === 'pending'; }).length;
+    const low = C.lowStock(state, today()).length;
+    const setDot = function (id, n) { const el = $(id); el.textContent = n; el.classList.toggle('hidden', !n); };
+    setDot('#dot-today', pending); setDot('#dot-inv', low);
+  }
+
+  const globalActions = {
+    'goto': function (d) { setTab(d.v); },
+    'open-settings': openSettings,
+    'dlg-close': closeDlg,
+    'export': exportJSON,
+    'import': function () { $('#import-file').click(); },
+    'load-sample': loadSample,
+    'set-theme': function (d) { state.settings.theme = d.v; applyTheme(); save(); $$('[data-action="set-theme"]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === d.v)); }); },
+    'reset-all': function () {
+      if (!confirm('Erase ALL data in this app on this device? Export a backup first if you might want it back.')) return;
+      state = C.defaultState(); save(); applyTheme(); closeDlg(); ui.date = today(); render(); toast('All data erased');
+    },
+  };
+  const allActions = Object.assign({}, globalActions, calcActions, todayActions, plannerActions, inventoryActions);
+
+  document.addEventListener('click', function (e) {
+    const el = e.target.closest('[data-action]'); if (!el) return;
+    const a = el.dataset.action;
+    if (a.indexOf('dlg-') === 0 && a !== 'dlg-close') { if (dlgCtl.click) dlgCtl.click(a, el.dataset, el); return; }
+    if (allActions[a]) allActions[a](el.dataset, el, e);
+  });
+  document.addEventListener('input', function (e) { if (e.target.closest('#dlg')) return; onCalcInput(e); });
+  document.addEventListener('change', function (e) {
+    if (e.target.closest('#dlg')) return;
+    if (e.target.hasAttribute('data-date-input')) { if (C.isYmd(e.target.value)) { ui.date = e.target.value; render(); } return; }
+    onCalcChange(e);
+  });
+  $('#tabs').addEventListener('click', function (e) { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+  window.addEventListener('hashchange', function () { const t = location.hash.slice(1); if (TABS.indexOf(t) >= 0 && t !== ui.tab) { ui.tab = t; render(); } });
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file'; fileInput.accept = '.json,application/json'; fileInput.id = 'import-file'; fileInput.hidden = true;
+  fileInput.addEventListener('change', function () {
+    const f = fileInput.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = function () { importJSONText(String(r.result)); fileInput.value = ''; };
+    r.readAsText(f);
+  });
+  document.body.appendChild(fileInput);
+
+
+  // ---------- PWA: offline cache (only on http/https; file:// keeps working without it) ----------
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('Service worker not registered', e); });
+    });
+  }
+
+  // ---------- Init ----------
+  (function init() {
+    applyTheme();
+    try { localStorage.setItem(STORAGE_KEY + ':probe', '1'); localStorage.removeItem(STORAGE_KEY + ':probe'); } catch (e) { storageOk = false; }
+    $('#store-warn').classList.toggle('hidden', storageOk);
+    const hash = location.hash.slice(1);
+    ui.tab = TABS.indexOf(hash) >= 0 ? hash : (state.protocols.length ? 'today' : 'calc');
+    if (/[?&]demo=1/.test(location.search) && !state.protocols.length && !state.vials.length) { state = makeSample(); save(); }
+    render();
+  })();
+})();
+
+</script>
+</body>
+</html>
