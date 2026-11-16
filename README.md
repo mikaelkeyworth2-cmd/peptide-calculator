@@ -9,6 +9,7 @@ A small, offline-capable web app for peptide reconstitution and dose math, a dos
 - **Planner:** protocols with dose steps (titrate dose and/or frequency per step) and a calendar.
 - **Today:** log doses, skips and undo.
 - **Inventory:** vials, BAC water, syringes, swabs, with projected run-out and reorder warnings.
+- **Notifications (optional):** Settings → Notifications switches on dose reminders and reorder alerts (off by default; your browser asks permission only then). There is also a calendar export (.ics with alarms for every planned dose). Browser notifications only fire while the app is open or recently used, so use the calendar export for reminders that must always arrive.
 
 ## Privacy
 Everything stays in your browser (localStorage). There is no server, no account and no tracking. Use Settings → Export/Import to back up or move data between devices. Data is per device and per URL.

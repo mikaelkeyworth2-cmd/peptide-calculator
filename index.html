@@ -648,7 +648,7 @@ const PepCore = (function () {
   function defaultState() {
     return {
       schemaVersion: SCHEMA_VERSION,
-      settings: { expiryDays: 28, leadDays: 14, vialLowDoses: 3, swabPerDose: false, theme: 'auto' },
+      settings: { expiryDays: 28, leadDays: 14, vialLowDoses: 3, swabPerDose: false, theme: 'auto', notifyDoses: false, notifyReorder: false, notifyLeadMin: 0, calIncludeDose: false },
       meta: { lastExport: null },
       calc: defaultCalc(), stock: [], vials: [], bac: [], needles: [], swabs: [], protocols: [], logs: {},
     };
@@ -686,6 +686,9 @@ const PepCore = (function () {
     s.settings.leadDays = nnum(s.settings.leadDays) === null ? 14 : nnum(s.settings.leadDays);
     s.settings.vialLowDoses = nnum(s.settings.vialLowDoses) === null ? 3 : nnum(s.settings.vialLowDoses);
     s.settings.swabPerDose = !!s.settings.swabPerDose;
+    // Notification settings (added after v2 shipped; additive, so no schema bump: missing values load as the defaults, i.e. off).
+    s.settings.notifyDoses = s.settings.notifyDoses === true; s.settings.notifyReorder = s.settings.notifyReorder === true; s.settings.calIncludeDose = s.settings.calIncludeDose === true;
+    s.settings.notifyLeadMin = nnum(s.settings.notifyLeadMin) !== null && nnum(s.settings.notifyLeadMin) >= 0 ? Math.min(Math.floor(nnum(s.settings.notifyLeadMin)), 720) : 0;
     if (['auto', 'light', 'dark'].indexOf(s.settings.theme) < 0) s.settings.theme = 'auto';
     if (!Array.isArray(s.calc.comps) || s.calc.comps.length < 2) s.calc.comps = defaultCalc().comps;
     arr('stock').forEach(function (x) {
@@ -746,6 +749,100 @@ const PepCore = (function () {
     return s;
   }
 
+  // ---------- Notifications & calendar export (pure logic; the UI/service worker only display what this returns) ----------
+  // Message text never includes dose amounts (a lock screen is public); it only names the protocol and time.
+  function minutesOf(t) { const m = /^(\d{2}):(\d{2})$/.exec(String(t || '')); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function clock12(t) { const mm = minutesOf(t); if (mm === null) return ''; const h = Math.floor(mm / 60); return ((h + 11) % 12 + 1) + ':' + pad(mm % 60) + ' ' + (h < 12 ? 'am' : 'pm'); }
+  /** Local Date for a 'YYYY-MM-DD' date plus 'HH:MM' time (null when the time is not set). */
+  function atTime(date, time) {
+    const mm = minutesOf(time); if (mm === null) return null;
+    const p = date.split('-').map(Number);
+    return new Date(p[0], p[1] - 1, p[2], Math.floor(mm / 60), mm % 60, 0, 0);
+  }
+  function notifyLead(state) { const n = nnum(state.settings && state.settings.notifyLeadMin); return n !== null && n >= 0 ? Math.min(Math.floor(n), 720) : 0; }
+  /** Unlogged doses scheduled today and tomorrow, each with `fireAt` (ms) = dose time minus the lead. Sorted by fireAt. */
+  function doseReminders(state, now) {
+    const lead = notifyLead(state), out = [], t0 = todayStr(now);
+    [t0, addDays(t0, 1)].forEach(function (date) {
+      dosesOn(state, date).forEach(function (x) {
+        if (x.log || !(x.doseMcg > 0)) return;
+        const at = atTime(date, x.time); if (!at) return;
+        const fireAt = at.getTime() - lead * 60000;
+        const when = clock12(x.time);
+        out.push({
+          id: x.key, protocolId: x.protocol.id, name: x.protocol.name, label: x.label, date: date, time: x.time, doseAt: at.getTime(), fireAt: fireAt,
+          title: lead > 0 ? 'Dose in ' + lead + ' min: ' + x.protocol.name : 'Dose due: ' + x.protocol.name,
+          body: (x.label ? x.label + ' · ' : '') + when + ' · not logged yet. Tap to open Today.',
+        });
+      });
+    });
+    out.sort(function (a, b) { return a.fireAt - b.fireAt; });
+    return out;
+  }
+  /** Reminders whose time has come and that were not notified yet. `notified` maps dose key -> timestamp. */
+  function dueReminders(state, now, notified) {
+    const t = now.getTime();
+    return doseReminders(state, now).filter(function (r) { return r.fireAt <= t && !(notified && notified[r.id]); });
+  }
+  /** Items the existing low-stock logic flags, one entry per item per day (key = kind|id|date). */
+  function reorderAlerts(state, now) {
+    const date = todayStr(now);
+    const seen = {}, out = [];
+    lowStock(state, date).forEach(function (it) {
+      const key = it.kind + '|' + (it.id || it.label) + '|' + date;
+      if (seen[key]) return; seen[key] = true;
+      const verb = it.level === 'out' ? 'Out / expired: ' : it.level === 'low' ? 'Running low: ' : 'Running out soon: ';
+      out.push({ key: key, kind: it.kind, id: it.id, level: it.level, title: 'Stock alert: ' + it.label, body: verb.replace(/: $/, '') + ' · ' + it.reason + '. Tap to open Inventory.' });
+    });
+    return out;
+  }
+  function icsEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+  function icsFold(line) {
+    const out = []; let cur = '', bytes = 0;
+    Array.from(line).forEach(function (ch) {
+      const cp = ch.codePointAt(0), b = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+      if (bytes + b > (out.length ? 74 : 75)) { out.push(cur); cur = ''; bytes = 0; }
+      cur += ch; bytes += b;
+    });
+    out.push(cur);
+    return out.join('\r\n ');
+  }
+  function icsLocal(d) { return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + 'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00'; }
+  function icsUtc(d) { return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z'; }
+  /** iCalendar text: one event (with a VALARM) per planned dose, for every active protocol and every dose time (AM, PM, ...), from today to the end of each cycle.
+   *  Uses floating local times so the alarms follow the phone's clock. Dose amounts are only included when opts.includeDose is set. */
+  function buildICS(state, opts) {
+    opts = opts || {};
+    const now = opts.now || new Date(), t0 = todayStr(now), lead = opts.leadMin !== undefined ? Math.max(0, Math.floor(opts.leadMin) || 0) : notifyLead(state), max = opts.maxEvents || 5000;
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Peptide Calculator//Dose reminders//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Peptide dose reminders'];
+    let count = 0, first = null, last = null, truncated = false; const names = {};
+    state.protocols.forEach(function (p) {
+      if (p.active === false || cycleEnd(p) < t0) return;
+      const from = p.start > t0 ? p.start : t0, days = diffDays(from, cycleEnd(p));
+      for (let i = 0; i <= days && !truncated; i++) {
+        const date = addDays(from, i);
+        if (!isScheduled(p, date)) continue;
+        const mix = resolveMix(state, p), step = stepFor(p, date);
+        timesFor(p, step).forEach(function (tm, slot) {
+          if (truncated) return;
+          const at = atTime(date, tm.time); if (!at) return;
+          if (count >= max) { truncated = true; return; }
+          const end = new Date(at.getTime() + 15 * 60000);
+          const mcg = doseForSlot(p, date, slot);
+          let desc = 'Planned in your Peptide Calculator & Planner. Log it in the app when done. Math tool only, not medical advice.';
+          if (opts.includeDose && mcg > 0) { const u = unitsFor(mix, p.doseBy, mcg, p.syringeId); desc = 'Your planned dose: ' + fmt(mcg, 3) + ' mcg' + (u > 0 ? ' (' + fmt(u, 2) + ' units on ' + syringeById(p.syringeId).label + ')' : '') + '. ' + desc; }
+          lines.push('BEGIN:VEVENT', 'UID:' + p.id + '-' + date + '-' + slot + '@peptide-calculator', 'DTSTAMP:' + icsUtc(now), 'DTSTART:' + icsLocal(at), 'DTEND:' + icsLocal(end),
+            'SUMMARY:' + icsEscape('Peptide dose: ' + p.name + (tm.label ? ' (' + tm.label + ')' : '')), 'DESCRIPTION:' + icsEscape(desc),
+            'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEscape('Dose due: ' + p.name), 'TRIGGER:' + (lead > 0 ? '-PT' + lead + 'M' : 'PT0S'), 'END:VALARM', 'END:VEVENT');
+          count++; names[p.id] = true;
+          if (!first || date < first) first = date; if (!last || date > last) last = date;
+        });
+      }
+    });
+    lines.push('END:VCALENDAR');
+    return { text: lines.map(icsFold).join('\r\n') + '\r\n', count: count, protocols: Object.keys(names).length, from: first, to: last, truncated: truncated };
+  }
+
   return {
     SCHEMA_VERSION: SCHEMA_VERSION, SYRINGES: SYRINGES, DEFAULT_SYRINGE_ID: DEFAULT_SYRINGE_ID, PRESETS: PRESETS, CUSTOM: CUSTOM, CUSTOM_BLEND: CUSTOM_BLEND, BLENDS: BLENDS, LADDER: LADDER,
     num: num, fmt: fmt, uid: uid, syringeById: syringeById, compute: compute, blendDelivery: blendDelivery, waterForUnits: waterForUnits,
@@ -754,6 +851,7 @@ const PepCore = (function () {
     cycleEnd: cycleEnd, weekOf: weekOf, doseFor: doseFor, doseForSlot: doseForSlot, stepFor: stepFor, freqFor: freqFor, timesFor: timesFor, dosesPerWeek: dosesPerWeek, isScheduled: isScheduled, logKey: logKey, protocolStatus: protocolStatus, stepProblems: stepProblems,
     dosesOn: dosesOn, pendingDoses: pendingDoses, linkableProtocols: linkableProtocols, pickNeedle: pickNeedle, setLog: setLog, clearLog: clearLog, reconstitute: reconstitute,
     vialDoseCount: vialDoseCount, projectVial: projectVial, projectNeedleType: projectNeedleType, projectSwabs: projectSwabs, projectSupply: projectSupply,
+    minutesOf: minutesOf, clock12: clock12, atTime: atTime, notifyLead: notifyLead, doseReminders: doseReminders, dueReminders: dueReminders, reorderAlerts: reorderAlerts, buildICS: buildICS,
     vialExpiryState: vialExpiryState, lowStock: lowStock, needleLabel: needleLabel, defaultCalc: defaultCalc, defaultState: defaultState, normalizeState: normalizeState,
   };
 })();
@@ -776,7 +874,7 @@ const PepCore = (function () {
   let state = load();
   let storageOk = true;
   const ui = { tab: 'calc', date: C.todayStr(), calStart: mondayOf(C.todayStr()) };
-  let saveTimer = null;
+  let saveTimer = null, notifyChanged = false;
 
   function load() {
     let raw = null;
@@ -801,6 +899,7 @@ const PepCore = (function () {
     clearTimeout(saveTimer);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); storageOk = true; } catch (e) { storageOk = false; }
     $('#store-warn').classList.toggle('hidden', storageOk);
+    if (typeof notifyRefreshSoon === 'function' && (notifyOn() || notifyChanged)) { notifyChanged = notifyOn(); notifyRefreshSoon(); }
   }
   function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 250); }
   window.addEventListener('pagehide', save);
@@ -1839,6 +1938,156 @@ const PepCore = (function () {
     },
   };
 
+  // ---------- Notifications (opt-in) ----------
+  // Off by default. Permission is requested only when the user switches a toggle on (or taps "Send test notification").
+  // Notifications are shown through the service worker (required on Android Chrome). While the app is open they come from timers plus
+  // checks on open / focus / visibility / every minute. A snapshot of upcoming reminders is kept in Cache Storage so the service worker
+  // can also show them from a Periodic Background Sync event where the browser allows it (best effort only).
+  const NOTIFIED_KEY = 'peptide-app:notified';
+  const SNAP_CACHE = 'peptide-notify-state', SNAP_URL = './notify-state.json', PERIODIC_TAG = 'peptide-dose-check';
+  const DAY_MS = 864e5;
+  let notifyTimer = null, notifyChecking = false, notifyDebounce = null, notified = loadNotified();
+  function notifySupported() { return typeof Notification !== 'undefined'; }
+  function notifyPerm() { return notifySupported() ? Notification.permission : 'unsupported'; }
+  function notifyOn() { return !!(state.settings.notifyDoses || state.settings.notifyReorder); }
+  function loadNotified() {
+    try { const o = JSON.parse(localStorage.getItem(NOTIFIED_KEY) || '{}'); return { d: o && o.d && typeof o.d === 'object' ? o.d : {}, r: o && o.r && typeof o.r === 'object' ? o.r : {} }; } catch (e) { return { d: {}, r: {} }; }
+  }
+  function saveNotified() {
+    const cut = Date.now() - 4 * DAY_MS;
+    ['d', 'r'].forEach(function (k) { Object.keys(notified[k]).forEach(function (id) { if (!(notified[k][id] > cut)) delete notified[k][id]; }); });
+    try { localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified)); } catch (e) { /* ignore */ }
+  }
+  function notifyOpts(tag, tab) { return { body: '', tag: tag, icon: 'icon-192.png', badge: 'icon-192.png', data: { tab: tab, url: './#' + tab } }; }
+  /** Show one notification via the service worker (falls back to the page Notification API where there is no worker, e.g. file://). */
+  function showNotif(title, body, tag, tab) {
+    const o = notifyOpts(tag, tab); o.body = body;
+    const viaPage = function () { try { const n = new Notification(title, o); n.onclick = function () { try { window.focus(); } catch (e) { /* ignore */ } setTab(tab); n.close(); }; return true; } catch (e) { return false; } };
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      const ready = navigator.serviceWorker.ready.then(function (reg) { return reg.showNotification(title, o); }).then(function () { return true; });
+      const timeout = new Promise(function (res) { setTimeout(function () { res(null); }, 4000); });
+      return Promise.race([ready, timeout]).then(function (r) { return r === true ? true : viaPage(); }).catch(viaPage);
+    }
+    return Promise.resolve(viaPage());
+  }
+  function readSnapshot() {
+    if (typeof caches === 'undefined') return Promise.resolve(null);
+    return caches.open(SNAP_CACHE).then(function (c) { return c.match(SNAP_URL); }).then(function (r) { return r ? r.json() : null; }).catch(function () { return null; });
+  }
+  function writeSnapshot(obj) {
+    if (typeof caches === 'undefined') return Promise.resolve();
+    return caches.open(SNAP_CACHE).then(function (c) { return c.put(SNAP_URL, new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } })); }).catch(function () { /* ignore */ });
+  }
+  function clearSnapshot() { if (typeof caches !== 'undefined') caches.delete(SNAP_CACHE).catch(function () { /* ignore */ }); }
+  function setPeriodicSync(on) {
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+    navigator.serviceWorker.ready.then(function (reg) {
+      if (!reg.periodicSync) return;
+      return on ? reg.periodicSync.register(PERIODIC_TAG, { minInterval: 15 * 60 * 1000 }) : reg.periodicSync.unregister(PERIODIC_TAG);
+    }).catch(function () { /* best effort: not supported, not installed or not allowed */ });
+  }
+  /** Run every check: due doses, reorder alerts, then re-arm the timer for the next dose and refresh the snapshot. */
+  function checkNotifications() {
+    if (notifyChecking) return; notifyChecking = true;
+    readSnapshot().then(function (snap) {
+      notified = loadNotified();
+      if (snap && snap.notified) { // merge what the service worker already showed
+        Object.keys(snap.notified).forEach(function (k) { if (snap.notified[k] === 1 || snap.notified[k] > 0) { const g = k.charAt(0) === 'r' ? 'r' : 'd'; notified[g][k.slice(2)] = notified[g][k.slice(2)] || Date.now(); } });
+      }
+      runChecks();
+    }).catch(function () { runChecks(); }).then(function () { notifyChecking = false; });
+  }
+  function runChecks() {
+    clearTimeout(notifyTimer); notifyTimer = null;
+    const s = state.settings;
+    if (!notifyOn() || notifyPerm() !== 'granted') { if (!notifyOn()) { clearSnapshot(); } return; }
+    const now = new Date(), nowMs = now.getTime();
+    let rems = [], alerts = [];
+    if (s.notifyDoses) {
+      rems = C.doseReminders(state, now);
+      const due = rems.filter(function (r) { return r.fireAt <= nowMs && !notified.d[r.id]; });
+      due.forEach(function (r) { notified.d[r.id] = nowMs; });
+      if (due.length > 3) showNotif(due.length + ' doses due or overdue', 'Open Today to log or skip them.', 'doses-batch-' + C.todayStr(now), 'today');
+      else due.forEach(function (r) { showNotif(r.title, r.body, 'dose-' + r.id, 'today'); });
+    }
+    if (s.notifyReorder) {
+      alerts = C.reorderAlerts(state, now);
+      alerts.forEach(function (a) { if (notified.r[a.key]) return; notified.r[a.key] = nowMs; showNotif(a.title, a.body, 'stock-' + a.key, 'inventory'); });
+    }
+    saveNotified();
+    const next = rems.filter(function (r) { return r.fireAt > nowMs && !notified.d[r.id]; })[0];
+    if (next) notifyTimer = setTimeout(checkNotifications, Math.min(next.fireAt - nowMs + 500, 2147000000));
+    // Snapshot for the service worker's Periodic Background Sync (best effort).
+    const nk = {}; Object.keys(notified.d).forEach(function (k) { nk['d|' + k] = 1; }); Object.keys(notified.r).forEach(function (k) { nk['r|' + k] = 1; });
+    writeSnapshot({
+      updated: nowMs, notifyDoses: !!s.notifyDoses, notifyReorder: !!s.notifyReorder,
+      doses: rems.filter(function (r) { return r.fireAt > nowMs - 6 * 3600000; }).map(function (r) { return { id: r.id, at: r.fireAt, title: r.title, body: r.body }; }),
+      reorders: alerts.map(function (a) { return { key: a.key, title: a.title, body: a.body }; }),
+      notified: nk,
+    });
+  }
+  /** Called after settings/data change: debounce, then re-check (also arms/disarms the background extras). */
+  function notifyRefreshSoon() {
+    clearTimeout(notifyDebounce);
+    notifyDebounce = setTimeout(function () { setPeriodicSync(notifyOn() && notifyPerm() === 'granted'); checkNotifications(); }, 600);
+  }
+  /** Ask for permission (call from a click/change handler). Resolves 'granted' | 'denied' | 'default' | 'unsupported'. */
+  function askPermission() {
+    if (!notifySupported()) return Promise.resolve('unsupported');
+    if (Notification.permission !== 'default') return Promise.resolve(Notification.permission);
+    try {
+      const r = Notification.requestPermission(function () { /* legacy callback form */ });
+      return Promise.resolve(r).then(function (p) { return p || Notification.permission; }).catch(function () { return Notification.permission; });
+    } catch (e) { return Promise.resolve(Notification.permission); }
+  }
+  function notifyStatusText() {
+    const p = notifyPerm(), s = state.settings;
+    if (p === 'unsupported') return 'This browser does not support notifications here (on iPhone they only work once the app is added to the Home Screen). The calendar export below still works.';
+    if (p === 'denied') return 'Notifications are blocked for this site. Allow them in your browser or phone site settings, then switch a toggle on again. The calendar export below still works.';
+    if (notifyOn() && p === 'default') return 'Switched on, but this browser has not given permission yet. Switch the toggle off and on again to allow it.';
+    if (notifyOn()) return 'Notifications are on: ' + [s.notifyDoses ? 'dose reminders' : '', s.notifyReorder ? 'reorder alerts' : ''].filter(Boolean).join(' and ') + '.';
+    return 'Notifications are off.';
+  }
+  function setNotifStatus(msg) { const e = $('#notif-status'); if (e) e.textContent = msg || notifyStatusText(); }
+  function onNotifyToggle(el) {
+    const key = el.dataset.notify === 'doses' ? 'notifyDoses' : 'notifyReorder';
+    if (!el.checked) { state.settings[key] = false; save(); setNotifStatus(); notifyRefreshSoon(); return; }
+    el.disabled = true;
+    askPermission().then(function (perm) {
+      el.disabled = false;
+      if (perm === 'granted') { state.settings[key] = true; save(); setNotifStatus(); notifyRefreshSoon(); checkNotifications(); }
+      else { el.checked = false; state.settings[key] = false; save(); setNotifStatus(); }
+    });
+  }
+  function sendTestNotification() {
+    askPermission().then(function (perm) {
+      if (perm !== 'granted') { setNotifStatus(); return; }
+      showNotif('Test notification', 'Notifications are working. Tap to open Today.', 'test-' + Date.now(), 'today').then(function (okShown) {
+        setNotifStatus(okShown ? 'Test notification sent. If you did not see it, check your device notification settings.' : 'Could not show a notification in this browser. Use the calendar export instead.');
+      });
+    });
+  }
+  function downloadCalendar() {
+    const incl = $('#dlg [name="calIncludeDose"]'), leadEl = $('#dlg [name="notifyLeadMin"]');
+    const lead = leadEl ? Math.max(0, Math.min(720, parseInt(leadEl.value, 10) || 0)) : C.notifyLead(state);
+    const r = C.buildICS(state, { includeDose: incl ? incl.checked : state.settings.calIncludeDose, leadMin: lead });
+    if (!r.count) { setNotifStatus('Nothing to export: no planned doses are left in an active protocol. Add or unpause a protocol in the Planner first.'); return; }
+    const blob = new Blob([r.text], { type: 'text/calendar' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'peptide-dose-reminders-' + today() + '.ics';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    setNotifStatus('Calendar file downloaded: ' + r.count + ' dose reminder' + (r.count === 1 ? '' : 's') + ' for ' + r.protocols + ' protocol' + (r.protocols === 1 ? '' : 's') + ', ' + fmtDate(r.from, { year: true }) + ' to ' + fmtDate(r.to, { year: true }) + (r.truncated ? ' (trimmed to the first ' + r.count + ')' : '') + '. Open the file to add them to your calendar app.');
+  }
+  function startNotifications() {
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && notifyOn()) checkNotifications(); });
+    window.addEventListener('focus', function () { if (notifyOn()) checkNotifications(); });
+    window.addEventListener('pageshow', function () { if (notifyOn()) checkNotifications(); });
+    setInterval(function () { if (notifyOn()) checkNotifications(); }, 60000);
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'notification-click') setTab(e.data.tab === 'inventory' ? 'inventory' : 'today'); });
+    if (notifyOn()) { setPeriodicSync(notifyPerm() === 'granted'); checkNotifications(); }
+  }
+
   // ---------- Settings, backup, sample data ----------
   function exportJSON() {
     state.meta.lastExport = new Date().toISOString(); save();
@@ -1865,6 +2114,17 @@ const PepCore = (function () {
       '<div class="row"><label class="f"><span class="l">Default vial expiry (days after mixing)</span><input type="number" step="1" min="1" name="expiryDays" value="' + s.expiryDays + '"></label><label class="f"><span class="l">Warn when stock runs out within (days)</span><input type="number" step="1" min="0" name="leadDays" value="' + s.leadDays + '"></label></div>' +
       '<label class="f" style="max-width:300px"><span class="l">Flag an active vial when this many doses or fewer remain</span><input type="number" step="1" min="0" name="vialLowDoses" value="' + s.vialLowDoses + '"></label>' +
       '<label class="chk"><input type="checkbox" name="swabPerDose"' + (s.swabPerDose ? ' checked' : '') + '> Deduct one alcohol swab per logged dose</label>' +
+      '<div class="callout" id="notif-box"><strong class="lead">Notifications (optional)</strong>' +
+        '<p class="small">Off unless you switch them on. Your browser will ask for permission when you do. The switches below apply straight away.</p>' +
+        '<label class="chk"><input type="checkbox" data-notify="doses"' + (s.notifyDoses && notifyPerm() === 'granted' ? ' checked' : '') + '> Dose reminders (planned doses you have not logged)</label>' +
+        '<label class="chk"><input type="checkbox" data-notify="reorder"' + (s.notifyReorder && notifyPerm() === 'granted' ? ' checked' : '') + '> Reorder alerts (low stock, one per item per day)</label>' +
+        '<label class="f" style="max-width:320px"><span class="l">Remind me this many minutes before a dose (0 = at the dose time)</span><input type="number" step="1" min="0" max="720" name="notifyLeadMin" value="' + C.notifyLead(state) + '"></label>' +
+        '<div class="row"><button type="button" class="btn" data-action="dlg-notify-test">Send test notification</button></div>' +
+        '<p class="small" id="notif-status" role="status">' + esc(notifyStatusText()) + '</p>' +
+        '<p class="small"><strong>Good to know:</strong> browser notifications only fire while the app is open or has been used recently, because a web app cannot run a timer once your phone has put it to sleep. For reminders that always arrive, even when the app is closed, use the calendar export, which works anytime.</p>' +
+        '<div class="row"><button type="button" class="btn primary" data-action="dlg-notify-ics">Add dose reminders to calendar</button></div>' +
+        '<label class="chk"><input type="checkbox" name="calIncludeDose"' + (s.calIncludeDose ? ' checked' : '') + '> Include my planned dose amounts in the calendar events</label>' +
+        '<p class="small muted">Downloads an .ics file with an alarm for every planned dose (every peptide, AM and PM) from today to the end of each active cycle. Open it on your phone or PC to add it to your calendar. Re-export after you change a protocol.</p></div>' +
       '<div class="callout"><strong class="lead">Your data</strong><p class="small">Everything is stored only in this browser on this device (localStorage). Clearing site data or switching browser/URL loses it, so export a backup now and then. ' + 'Last backup: ' + (state.meta.lastExport ? esc(new Date(state.meta.lastExport).toLocaleString()) : 'never') + '.</p><div class="row"><button type="button" class="btn" data-action="export">⬇ Export JSON</button><button type="button" class="btn" data-action="import">⬆ Import JSON…</button></div></div>' +
       '<div class="row"><button type="button" class="btn" data-action="load-sample">Load demo data</button><button type="button" class="btn danger" data-action="reset-all">Erase everything</button></div>' +
       '<div class="callout"><strong class="lead">Math tool only</strong><p class="small">' + esc(DISCLAIMER) + '</p></div></div>';
@@ -1872,8 +2132,15 @@ const PepCore = (function () {
       submit: function (form) {
         const n = function (k, d, min) { const v = parseInt(form.elements[k].value, 10); return Number.isFinite(v) && v >= min ? v : d; };
         s.expiryDays = n('expiryDays', 28, 1); s.leadDays = n('leadDays', 14, 0); s.vialLowDoses = n('vialLowDoses', 3, 0); s.swabPerDose = form.elements.swabPerDose.checked;
+        s.notifyLeadMin = Math.min(720, n('notifyLeadMin', 0, 0)); s.calIncludeDose = form.elements.calIncludeDose.checked;
         save(); closeDlg(); render(); toast('Settings saved');
       },
+      change: function (e) {
+        if (e.target.dataset && e.target.dataset.notify) onNotifyToggle(e.target);
+        else if (e.target.name === 'notifyLeadMin') { const v = parseInt(e.target.value, 10); s.notifyLeadMin = Number.isFinite(v) && v >= 0 ? Math.min(v, 720) : 0; save(); }
+        else if (e.target.name === 'calIncludeDose') { s.calIncludeDose = e.target.checked; save(); }
+      },
+      click: function (a) { if (a === 'dlg-notify-test') sendTestNotification(); else if (a === 'dlg-notify-ics') downloadCalendar(); },
     });
   }
   function makeSample() {
@@ -1987,6 +2254,7 @@ const PepCore = (function () {
     ui.tab = TABS.indexOf(hash) >= 0 ? hash : (state.protocols.length ? 'today' : 'calc');
     if (/[?&]demo=1/.test(location.search) && !state.protocols.length && !state.vials.length) { state = makeSample(); save(); }
     render();
+    startNotifications();
   })();
 })();
 
